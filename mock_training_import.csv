@@ -1,0 +1,11 @@
+﻿employee_code,name,email,department,progress,score
+ACM-9001,Aarav Sen,aarav.sen@acmecorp.com,Engineering,100,94.5
+ACM-9002,Pooja Verma,pooja.verma@acmecorp.com,Human Resources,100,88.0
+ACM-9003,Rohan Kulkarni,rohan.kulkarni@acmecorp.com,Finance & Operations,65,48.0
+ACM-9004,Neha Deshmukh,neha.deshmukh@acmecorp.com,Sales & Marketing,100,91.0
+ACM-9005,Vikram Malhotra,vikram.malhotra@acmecorp.com,Product Design,30,
+ACM-9006,Ishita Nair,ishita.nair@acmecorp.com,Legal & Compliance,100,96.0
+ACM-9007,Kabir Reddy,kabir.reddy@acmecorp.com,Engineering,100,82.5
+ACM-9008,Tanvi Kapoor,tanvi.kapoor@acmecorp.com,Sales & Marketing,0,
+ACM-9009,Aditya Joshi,aditya.joshi@acmecorp.com,Finance & Operations,100,74.0
+ACM-9010,Meera Bannerjee,meera.bannerjee@acmecorp.com,Engineering,100,90.0
