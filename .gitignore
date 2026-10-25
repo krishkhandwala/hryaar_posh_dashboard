@@ -1,0 +1,17 @@
+﻿# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.pytest_cache/
+.env
+
+# Node
+node_modules/
+.next/
+dist/
+out/
+.env*.local
+*.log
