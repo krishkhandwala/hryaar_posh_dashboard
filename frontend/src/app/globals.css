@@ -1,24 +1,26 @@
-﻿@import "tailwindcss";
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --navy-deep: #0D2345;
-  --navy-sidebar: #0B1D3A;
-  --blue-primary: #315FD1;
-  --bg-light: #F4F8FD;
-  --card-bg: #FFFFFF;
-  --text-primary: #152A49;
-  --text-secondary: #64748B;
-  --status-green: #10B981;
-  --status-amber: #F59E0B;
-  --status-red: #EF4444;
-  --purple-accent: #8B5CF6;
+  --navy-deep: #08162B;
+  --navy-card: #0D2140;
+  --navy-sidebar: #061122;
+  --blue-accent: #2A62FF;
+  --canvas-bg: #F5F8FC;
+  --text-primary: #0A192F;
 }
 
 body {
-  background-color: #F4F8FD;
-  color: #152A49;
+  background-color: #F5F8FC;
+  color: #0A192F;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
+}
+
+.mono-numeric {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }

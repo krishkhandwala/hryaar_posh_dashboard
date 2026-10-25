@@ -9,7 +9,8 @@ import { ProgramProgress } from '@/components/dashboard/ProgramProgress';
 import { EmployeeTable } from '@/components/dashboard/EmployeeTable';
 import { ImportModal } from '@/components/modals/ImportModal';
 import { apiClient } from '@/lib/api';
-import { ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
+import { ShieldCheck, RefreshCw, AlertCircle, Sparkles, Building2, Lock, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -46,7 +47,7 @@ export default function Home() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Attempt to restore token
+  // Restore session
   useEffect(() => {
     const savedToken = localStorage.getItem('posh_token');
     if (savedToken) {
@@ -73,10 +74,16 @@ export default function Home() {
       }
       loadDashboardData(data.company_id || 'c-acme-corp-1250');
     } catch (err: any) {
-      setLoginError(err.response?.data?.detail || 'Invalid email or password');
+      setLoginError(err.response?.data?.detail || 'Invalid corporate credentials');
     } finally {
       setLoginLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('posh_token');
+    setToken(null);
+    setUser(null);
   };
 
   const fetchUserData = async (tok: string) => {
@@ -91,8 +98,7 @@ export default function Home() {
         loadDashboardData(selectedCompanyId);
       }
     } catch {
-      localStorage.removeItem('posh_token');
-      setToken(null);
+      handleLogout();
     }
   };
 
@@ -141,40 +147,49 @@ export default function Home() {
 
   const departmentList = Array.from(new Set(employees.map((e) => e.department))).filter(Boolean);
 
-  // If not logged in, show polished enterprise login portal
+  // Distinctive Enterprise Login Portal
   if (!token) {
     return (
-      <div className="min-h-screen bg-[#0B1D3A] flex flex-col justify-center items-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 border border-slate-100">
-          <div className="text-center mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#315FD1] to-[#60A5FA] flex items-center justify-center font-black text-white text-xl mx-auto mb-3 shadow-lg">
+      <div className="min-h-screen bg-[#061122] flex flex-col justify-center items-center p-6 relative overflow-hidden">
+        {/* Ambient atmospheric layers */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#2A62FF]/15 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="max-w-md w-full bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.3)] p-8 border border-slate-100 relative z-10"
+        >
+          <div className="text-center mb-7">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#2A62FF] to-[#1D4ED8] flex items-center justify-center font-black text-white text-xl mx-auto mb-4 shadow-[0_8px_20px_rgba(42,98,255,0.35)] border border-blue-400/30">
               H
             </div>
-            <h2 className="text-2xl font-black text-[#0D2345] tracking-tight">
+            <h2 className="text-2xl font-black text-[#0A192F] tracking-tight">
               HRYAAR Digi-PoSH
             </h2>
             <p className="text-xs font-semibold text-slate-500 mt-1">
-              Awareness | Respect | Safer Workplaces
+              Enterprise Prevention of Sexual Harassment Management
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Corporate Email
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Authorized Corporate Email
               </label>
               <input
                 type="email"
                 required
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#315FD1]"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2A62FF] transition-all"
                 placeholder="name@company.com"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Password
               </label>
               <input
@@ -182,30 +197,30 @@ export default function Home() {
                 required
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#315FD1]"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2A62FF] transition-all"
               />
             </div>
 
             {loginError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{loginError}</span>
+                <span className="font-semibold">{loginError}</span>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full py-2.5 bg-[#315FD1] hover:bg-[#254cb2] text-white font-bold text-xs rounded-lg transition-all shadow-md"
+              className="w-full py-3 bg-gradient-to-r from-[#2A62FF] to-[#1D4ED8] hover:from-[#1D4ED8] hover:to-[#1E40AF] text-white font-bold text-xs rounded-xl transition-all shadow-[0_4px_16px_rgba(42,98,255,0.35)] active:scale-95"
             >
               {loginLoading ? 'Authenticating...' : 'Sign In to Digi-PoSH Portal'}
             </button>
           </form>
 
-          {/* Quick Demo Switcher */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2.5">
-              Instant Demo Accounts
+          {/* Quick Demo Credentials */}
+          <div className="mt-7 pt-5 border-t border-slate-100">
+            <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider text-center mb-3">
+              One-Click Demo Portals
             </p>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <button
@@ -214,10 +229,10 @@ export default function Home() {
                   setLoginEmail('hr@acme.com');
                   setLoginPassword('Acme@1234');
                 }}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-left font-medium text-slate-700"
+                className="p-3 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 rounded-xl text-left transition-colors group cursor-pointer"
               >
-                <div className="font-bold text-[#0D2345]">Acme Corp HR</div>
-                <div className="text-[10px] text-slate-500">1,250 Employees</div>
+                <div className="font-bold text-[#0A192F] group-hover:text-[#2A62FF]">Acme Corp HR</div>
+                <div className="text-[10px] text-slate-500 font-medium">1,250 Employees</div>
               </button>
               <button
                 type="button"
@@ -225,29 +240,30 @@ export default function Home() {
                   setLoginEmail('hr@beta.com');
                   setLoginPassword('Beta@1234');
                 }}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-left font-medium text-slate-700"
+                className="p-3 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 rounded-xl text-left transition-colors group cursor-pointer"
               >
-                <div className="font-bold text-[#0D2345]">Beta Ind. HR</div>
-                <div className="text-[10px] text-slate-500">600 Employees</div>
+                <div className="font-bold text-[#0A192F] group-hover:text-[#2A62FF]">Beta Ind. HR</div>
+                <div className="text-[10px] text-slate-500 font-medium">600 Employees</div>
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F8FD] flex">
+    <div className="min-h-screen bg-[#F5F8FC] flex subtle-mesh">
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         userRole={user?.role}
         companyName={user?.company_name || 'Acme Corporation'}
+        onLogout={handleLogout}
       />
 
-      {/* Main Content Area */}
+      {/* Main Workspace */}
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         <Header
           userName={user?.full_name || 'HR Administrator'}
@@ -262,45 +278,55 @@ export default function Home() {
           onImportClick={() => setIsImportModalOpen(true)}
         />
 
-        <main className="p-6 space-y-6 max-w-7xl w-full mx-auto">
-          {/* Welcome Capsule Banner */}
-          <div className="bg-white rounded-xl p-6 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <main className="p-7 space-y-6 max-w-7xl w-full mx-auto pb-12">
+          {/* Executive Overview Hero Banner */}
+          <div className="bg-gradient-to-r from-white via-white to-blue-50/30 rounded-2xl p-6 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-black text-[#0D2345] tracking-tight">
-                {user?.company_name || 'Acme Corporation'} PoSH Overview
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-extrabold uppercase bg-blue-50 text-[#2A62FF] px-2 py-0.5 rounded-md border border-blue-200/60">
+                  Annual Compliance Cycle
+                </span>
+                <span className="text-slate-300">&bull;</span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {user?.company_name || 'Acme Corporation'}
+                </span>
+              </div>
+              <h2 className="text-xl font-black text-[#0A192F] tracking-tight">
+                Statutory Sensitization & Assessment Dashboard
               </h2>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
-                Mandatory employee sensitization compliance under the Sexual Harassment of Women at Workplace Act, 2013.
+              <p className="text-xs text-slate-500 mt-1 font-medium max-w-2xl leading-relaxed">
+                Mandatory monitoring under the Sexual Harassment of Women at Workplace Act, 2013. Ingest LMS logs, run tests, and export certified records.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-2.5 shrink-0">
               <button
                 onClick={() => loadDashboardData(selectedCompanyId)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors"
+                className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? 'animate-spin' : ''}`} />
-                <span>Sync Metrics</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-[#2A62FF] ${loadingData ? 'animate-spin' : ''}`} />
+                <span>Sync Data</span>
               </button>
             </div>
           </div>
 
-          {/* 1. Dashboard KPI Cards */}
+          {/* 1. Core KPIs */}
           <KPICards kpis={kpis} />
 
-          {/* 2. Program Progress Roadmap & Upcoming IC Sessions */}
+          {/* 2. Program Roadmap & Workshops */}
           <ProgramProgress
             stages={stages}
             overallPct={kpis.training_completed_pct}
             webinars={webinars}
           />
 
-          {/* 3. Analytics Charts (Department Progress & Score Band Distribution) */}
+          {/* 3. Analytics Charts */}
           <AnalyticsCharts
             departments={departments}
             bands={assessmentBands}
           />
 
-          {/* 4. Employee Table with Search, Filter & CSV Export */}
+          {/* 4. Employee Audit Table */}
           <EmployeeTable
             employees={filteredEmployees}
             searchTerm={searchTerm}
@@ -311,13 +337,12 @@ export default function Home() {
           />
         </main>
 
-        {/* Compact Footer */}
-        <footer className="mt-auto py-4 px-6 border-t border-slate-200/60 bg-white text-center text-xs text-slate-400">
-          HRYAAR Digi-PoSH &copy; 2026. Awareness | Respect | Safer Workplaces. Production Multi-Tenant Platform.
+        <footer className="mt-auto py-4 px-7 border-t border-slate-200/60 bg-white text-center text-xs text-slate-400 font-medium">
+          HRYAAR Digi-PoSH &copy; 2026. Enterprise Multi-Tenant Platform &bull; Awareness | Respect | Safer Workplaces.
         </footer>
       </div>
 
-      {/* CSV Ingestion Modal */}
+      {/* Import CSV Modal */}
       <ImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}

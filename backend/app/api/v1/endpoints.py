@@ -1,7 +1,7 @@
 ﻿from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from app.db.session import get_db
 from app.core.deps import get_current_user, get_tenant_company_id, require_role
 from app.models.models import User, Company, Employee, Webinar, ComplianceDocument, AuditLog, ImportJob
@@ -23,8 +23,7 @@ def list_companies(
         return db.query(Company).filter(Company.is_active == True).all()
     if not current_user.company_id:
         return []
-    company = db.query(Company).filter(Company.id == current_user.company_id).all()
-    return company
+    return db.query(Company).filter(Company.id == current_user.company_id).all()
 
 @router.get("/dashboard/kpis", response_model=DashboardKPIs)
 def get_dashboard_kpis(
@@ -85,22 +84,18 @@ def get_department_stats(
 ):
     tenant_id = get_tenant_company_id(company_id, current_user)
     
-    # Query departments with total & completed counts
-    results = db.query(
-        Employee.department,
-        func.count(Employee.id).label("total"),
-        func.sum(func.case((Employee.training_status == "COMPLETED", 1), else_=0)).label("completed")
-    ).filter(Employee.company_id == tenant_id).group_by(Employee.department).all()
-
+    # Query distinct departments for this tenant
+    depts = [d[0] for d in db.query(Employee.department).filter(Employee.company_id == tenant_id).distinct().all()]
+    
     stats = []
-    for dept, tot, comp in results:
-        comp_val = int(comp or 0)
-        tot_val = int(tot or 0)
-        pct = round((comp_val / tot_val * 100), 1) if tot_val > 0 else 0.0
+    for dept in depts:
+        tot = db.query(Employee).filter(Employee.company_id == tenant_id, Employee.department == dept).count()
+        comp = db.query(Employee).filter(Employee.company_id == tenant_id, Employee.department == dept, Employee.training_status == "COMPLETED").count()
+        pct = round((comp / tot * 100), 1) if tot > 0 else 0.0
         stats.append(DepartmentStat(
             department=dept,
-            total=tot_val,
-            completed=comp_val,
+            total=tot,
+            completed=comp,
             percentage=pct
         ))
     return stats
@@ -161,21 +156,6 @@ def get_program_stages(
         ProgramStage(stage="Certification", status="Issued", completed_count=cert_done, total_count=total, percentage=round(cert_done/total*100, 1)),
     ]
 
-@router.get("/dashboard/awareness-gaps", response_model=List[AwarenessGap])
-def get_awareness_gaps(
-    company_id: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    tenant_id = get_tenant_company_id(company_id, current_user)
-    # Topic breakdown calculated from real assessment results
-    return [
-        AwarenessGap(topic="Bystander Intervention Protocol", incorrect_rate_pct=34.2, impact_level="HIGH"),
-        AwarenessGap(topic="Quid Pro Quo vs Hostile Work Environment", incorrect_rate_pct=28.5, impact_level="MEDIUM"),
-        AwarenessGap(topic="Internal Committee (IC) Timelines & Filing", incorrect_rate_pct=21.0, impact_level="MEDIUM"),
-        AwarenessGap(topic="Digital Communication & Remote Workplace Harassment", incorrect_rate_pct=14.8, impact_level="LOW"),
-    ]
-
 @router.get("/dashboard/webinars", response_model=List[WebinarOut])
 def get_webinars(
     company_id: Optional[str] = None,
@@ -185,24 +165,13 @@ def get_webinars(
     tenant_id = get_tenant_company_id(company_id, current_user)
     return db.query(Webinar).filter(Webinar.company_id == tenant_id).order_by(Webinar.session_time.desc()).all()
 
-@router.get("/dashboard/recent-activity", response_model=List[RecentActivityOut])
-def get_recent_activity(
-    company_id: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    tenant_id = get_tenant_company_id(company_id, current_user)
-    return db.query(AuditLog).filter(
-        (AuditLog.company_id == tenant_id) | (AuditLog.company_id.is_(None))
-    ).order_by(AuditLog.created_at.desc()).limit(10).all()
-
 @router.get("/employees", response_model=List[EmployeeOut])
 def list_employees(
     company_id: Optional[str] = None,
     search: Optional[str] = None,
     department: Optional[str] = None,
     training_status: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

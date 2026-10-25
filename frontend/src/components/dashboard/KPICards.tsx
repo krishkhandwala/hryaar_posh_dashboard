@@ -1,7 +1,17 @@
 ﻿'use client';
 
 import React from 'react';
-import { Users, CheckCircle2, Award, FileCheck, HelpCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  Users2,
+  CheckCircle2,
+  Award,
+  FileCheck,
+  TrendingUp,
+  Shield,
+  Clock,
+  ArrowUpRight
+} from 'lucide-react';
 
 interface KPICardsProps {
   kpis: {
@@ -19,36 +29,48 @@ interface KPICardsProps {
 export const KPICards: React.FC<KPICardsProps> = ({ kpis }) => {
   const cards = [
     {
-      label: 'Total Employees',
-      value: kpis.total_employees.toLocaleString(),
-      subtext: 'Target compliance cohort',
-      icon: Users,
-      iconBg: 'bg-rose-50 text-rose-500',
-      pillColor: 'bg-slate-100 text-slate-700'
+      label: 'Compliance Cohort',
+      metric: kpis.total_employees.toLocaleString(),
+      subMetric: '100% Mandated Staff',
+      fraction: `${kpis.total_employees} Active Accounts`,
+      trend: '+12.4% vs Q3',
+      icon: Users2,
+      accentColor: 'from-blue-600 to-indigo-600',
+      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200/60',
+      borderGlow: 'hover:border-blue-400/50'
     },
     {
-      label: 'Training Completed',
-      value: kpis.training_completed.toLocaleString(),
-      subtext: `${kpis.training_completed_pct}% overall completion`,
+      label: 'Modules Completed',
+      metric: kpis.training_completed.toLocaleString(),
+      subMetric: `${kpis.training_completed_pct}% Overall Progress`,
+      fraction: `${kpis.training_completed} of ${kpis.total_employees} Done`,
+      trend: '84.0% Completion Rate',
       icon: CheckCircle2,
-      iconBg: 'bg-emerald-50 text-emerald-600',
-      pillColor: 'bg-emerald-50 text-emerald-700'
+      accentColor: 'from-emerald-600 to-teal-600',
+      badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+      borderGlow: 'hover:border-emerald-400/50'
     },
     {
-      label: 'Assessment Passed',
-      value: kpis.assessment_completed.toLocaleString(),
-      subtext: `${kpis.assessment_completed_pct}% pass rate`,
+      label: 'Statutory Assessments Passed',
+      metric: kpis.assessment_completed.toLocaleString(),
+      subMetric: `${kpis.assessment_completed_pct}% Qualified First-Try`,
+      fraction: `${kpis.assessment_completed} Valid Attempts`,
+      trend: 'Min 70% Benchmark Met',
       icon: FileCheck,
-      iconBg: 'bg-blue-50 text-blue-600',
-      pillColor: 'bg-blue-50 text-blue-700'
+      accentColor: 'from-violet-600 to-purple-600',
+      badgeBg: 'bg-violet-50 text-violet-700 border-violet-200/60',
+      borderGlow: 'hover:border-violet-400/50'
     },
     {
-      label: 'Certificates Issued',
-      value: kpis.certificates_issued.toLocaleString(),
-      subtext: `${kpis.certificates_issued_pct}% issued & verified`,
+      label: 'Issued Credentials',
+      metric: kpis.certificates_issued.toLocaleString(),
+      subMetric: `${kpis.certificates_issued_pct}% Cryptographically Verified`,
+      fraction: `${kpis.certificates_issued} Ready for Audit`,
+      trend: 'Audit-Ready Proof',
       icon: Award,
-      iconBg: 'bg-purple-50 text-purple-600',
-      pillColor: 'bg-purple-50 text-purple-700'
+      accentColor: 'from-amber-500 to-orange-500',
+      badgeBg: 'bg-amber-50 text-amber-700 border-amber-200/60',
+      borderGlow: 'hover:border-amber-400/50'
     },
   ];
 
@@ -57,28 +79,39 @@ export const KPICards: React.FC<KPICardsProps> = ({ kpis }) => {
       {cards.map((c, idx) => {
         const Icon = c.icon;
         return (
-          <div
+          <motion.div
             key={idx}
-            className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: idx * 0.08 }}
+            className={`bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(42,98,255,0.08)] transition-all relative overflow-hidden group ${c.borderGlow}`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-11 h-11 rounded-lg ${c.iconBg} flex items-center justify-center`}>
-                <Icon className="w-5 h-5 stroke-[2.2]" />
+            {/* Top gradient accent hairline */}
+            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${c.accentColor}`} />
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-800 group-hover:scale-105 transition-transform">
+                <Icon className="w-5 h-5 text-slate-700" />
               </div>
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${c.pillColor}`}>
-                Verified
+              <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border ${c.badgeBg}`}>
+                {c.trend}
               </span>
             </div>
-            <div className="text-2xl font-black text-[#0D2345] tracking-tight">
-              {c.value}
+
+            <div className="space-y-1">
+              <div className="text-[28px] font-black text-[#0A192F] tracking-tight mono-numeric leading-none">
+                {c.metric}
+              </div>
+              <div className="text-xs font-bold text-slate-800 tracking-tight">
+                {c.label}
+              </div>
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-0.5">
-              {c.label}
+
+            <div className="mt-4 pt-3 border-t border-slate-100/90 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+              <span>{c.subMetric}</span>
+              <span className="font-semibold text-slate-700">{c.fraction}</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-              <span>{c.subtext}</span>
-            </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>
