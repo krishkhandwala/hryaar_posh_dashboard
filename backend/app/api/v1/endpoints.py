@@ -1,13 +1,13 @@
 ﻿from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
 from app.db.session import get_db
 from app.core.deps import get_current_user, get_tenant_company_id, require_role
-from app.models.models import User, Company, Employee, Webinar, ComplianceDocument, AuditLog, ImportJob
+from app.models.models import User, Company, CompanySettings, Employee, Webinar, ComplianceDocument, AuditLog, ImportJob
 from app.schemas.schemas import (
-    CompanyOut, EmployeeOut, DashboardKPIs, DepartmentStat,
-    AssessmentBandStat, ProgramStage, AwarenessGap, WebinarOut, RecentActivityOut
+    CompanyOut, CompanyUpdate, CompanySettingsOut, CompanySettingsUpdate,
+    EmployeeOut, EmployeeCreate, DashboardKPIs, DepartmentStat,
+    AssessmentBandStat, ProgramStage, WebinarOut, ComplianceDocOut, RecentActivityOut
 )
 from app.services.csv_service import CSVImportService
 
@@ -18,12 +18,102 @@ def list_companies(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List accessible companies. Platform Admins see all; others see their own."""
     if current_user.role == "PLATFORM_ADMIN":
         return db.query(Company).filter(Company.is_active == True).all()
     if not current_user.company_id:
         return []
     return db.query(Company).filter(Company.id == current_user.company_id).all()
+
+@router.get("/companies/current", response_model=CompanyOut)
+def get_current_company_details(
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return comp
+
+@router.put("/companies/current", response_model=CompanyOut)
+def update_current_company_details(
+    payload: CompanyUpdate,
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["PLATFORM_ADMIN", "HR_ADMIN"]))
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    if payload.name: comp.name = payload.name
+    if payload.posh_reporting_url: comp.posh_reporting_url = payload.posh_reporting_url
+    if payload.posh_reporting_email: comp.posh_reporting_email = payload.posh_reporting_email
+    if payload.ic_chairperson: comp.ic_chairperson = payload.ic_chairperson
+    if payload.industry: comp.industry = payload.industry
+    if payload.headquarters: comp.headquarters = payload.headquarters
+
+    audit = AuditLog(
+        company_id=tenant_id,
+        user_email=current_user.email,
+        action="COMPANY_PROFILE_UPDATED",
+        details=f"Updated company profile details by {current_user.email}"
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(comp)
+    return comp
+
+@router.get("/companies/current/settings", response_model=CompanySettingsOut)
+def get_company_settings(
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    settings = db.query(CompanySettings).filter(CompanySettings.company_id == tenant_id).first()
+    if not settings:
+        settings = CompanySettings(company_id=tenant_id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+@router.put("/companies/current/settings", response_model=CompanySettingsOut)
+def update_company_settings(
+    payload: CompanySettingsUpdate,
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["PLATFORM_ADMIN", "HR_ADMIN"]))
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    settings = db.query(CompanySettings).filter(CompanySettings.company_id == tenant_id).first()
+    if not settings:
+        settings = CompanySettings(company_id=tenant_id)
+        db.add(settings)
+
+    if payload.passing_threshold_pct is not None: settings.passing_threshold_pct = payload.passing_threshold_pct
+    if payload.mandate_year: settings.mandate_year = payload.mandate_year
+    if payload.auto_issue_certificates is not None: settings.auto_issue_certificates = payload.auto_issue_certificates
+    if payload.email_notifications is not None: settings.email_notifications = payload.email_notifications
+    if payload.escalate_non_compliance is not None: settings.escalate_non_compliance = payload.escalate_non_compliance
+    if payload.escalation_email: settings.escalation_email = payload.escalation_email
+    if payload.certificate_prefix: settings.certificate_prefix = payload.certificate_prefix
+    if payload.allowed_domains: settings.allowed_domains = payload.allowed_domains
+    if payload.sync_frequency: settings.sync_frequency = payload.sync_frequency
+
+    audit = AuditLog(
+        company_id=tenant_id,
+        user_email=current_user.email,
+        action="TENANT_SETTINGS_CONFIGURED",
+        details=f"Updated compliance parameters: passing_threshold={settings.passing_threshold_pct}%, prefix={settings.certificate_prefix}"
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 @router.get("/dashboard/kpis", response_model=DashboardKPIs)
 def get_dashboard_kpis(
@@ -32,33 +122,24 @@ def get_dashboard_kpis(
     current_user: User = Depends(get_current_user)
 ):
     tenant_id = get_tenant_company_id(company_id, current_user)
-    
     total = db.query(Employee).filter(Employee.company_id == tenant_id).count()
     if total == 0:
         return DashboardKPIs(
-            total_employees=0,
-            training_completed=0,
-            training_completed_pct=0.0,
-            assessment_completed=0,
-            assessment_completed_pct=0.0,
-            certificates_issued=0,
-            certificates_issued_pct=0.0,
-            compliance_docs=0
+            total_employees=0, training_completed=0, training_completed_pct=0.0,
+            assessment_completed=0, assessment_completed_pct=0.0, certificates_issued=0,
+            certificates_issued_pct=0.0, compliance_docs=0
         )
     
     training_done = db.query(Employee).filter(
-        Employee.company_id == tenant_id,
-        Employee.training_status == "COMPLETED"
+        Employee.company_id == tenant_id, Employee.training_status == "COMPLETED"
     ).count()
 
     assessment_done = db.query(Employee).filter(
-        Employee.company_id == tenant_id,
-        Employee.assessment_status == "PASSED"
+        Employee.company_id == tenant_id, Employee.assessment_status == "PASSED"
     ).count()
 
     certs = db.query(Employee).filter(
-        Employee.company_id == tenant_id,
-        Employee.certificate_status == "ISSUED"
+        Employee.company_id == tenant_id, Employee.certificate_status == "ISSUED"
     ).count()
 
     docs = db.query(ComplianceDocument).filter(
@@ -83,20 +164,14 @@ def get_department_stats(
     current_user: User = Depends(get_current_user)
 ):
     tenant_id = get_tenant_company_id(company_id, current_user)
-    
-    # Query distinct departments for this tenant
     depts = [d[0] for d in db.query(Employee.department).filter(Employee.company_id == tenant_id).distinct().all()]
-    
     stats = []
     for dept in depts:
         tot = db.query(Employee).filter(Employee.company_id == tenant_id, Employee.department == dept).count()
         comp = db.query(Employee).filter(Employee.company_id == tenant_id, Employee.department == dept, Employee.training_status == "COMPLETED").count()
         pct = round((comp / tot * 100), 1) if tot > 0 else 0.0
         stats.append(DepartmentStat(
-            department=dept,
-            total=tot,
-            completed=comp,
-            percentage=pct
+            department=dept, total=tot, completed=comp, percentage=pct
         ))
     return stats
 
@@ -107,10 +182,8 @@ def get_assessment_bands(
     current_user: User = Depends(get_current_user)
 ):
     tenant_id = get_tenant_company_id(company_id, current_user)
-    
     total_with_scores = db.query(Employee).filter(
-        Employee.company_id == tenant_id,
-        Employee.assessment_score.isnot(None)
+        Employee.company_id == tenant_id, Employee.assessment_score.isnot(None)
     ).count()
 
     if total_with_scores == 0:
@@ -165,6 +238,27 @@ def get_webinars(
     tenant_id = get_tenant_company_id(company_id, current_user)
     return db.query(Webinar).filter(Webinar.company_id == tenant_id).order_by(Webinar.session_time.desc()).all()
 
+@router.get("/documents", response_model=List[ComplianceDocOut])
+def get_compliance_documents(
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    return db.query(ComplianceDocument).filter(ComplianceDocument.company_id == tenant_id).all()
+
+@router.get("/audit-logs", response_model=List[RecentActivityOut])
+def get_audit_trail(
+    company_id: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    return db.query(AuditLog).filter(
+        (AuditLog.company_id == tenant_id) | (AuditLog.company_id.is_(None))
+    ).order_by(AuditLog.created_at.desc()).limit(limit).all()
+
 @router.get("/employees", response_model=List[EmployeeOut])
 def list_employees(
     company_id: Optional[str] = None,
@@ -193,6 +287,43 @@ def list_employees(
         query = query.filter(Employee.training_status == training_status)
 
     return query.order_by(Employee.employee_code.asc()).offset(offset).limit(limit).all()
+
+@router.post("/employees", response_model=EmployeeOut)
+def create_employee(
+    payload: EmployeeCreate,
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["PLATFORM_ADMIN", "HR_ADMIN"]))
+):
+    tenant_id = get_tenant_company_id(company_id, current_user)
+    existing = db.query(Employee).filter(
+        Employee.company_id == tenant_id,
+        (Employee.employee_code == payload.employee_code) | (Employee.email == payload.email)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Employee code or email already exists for this tenant")
+
+    emp = Employee(
+        company_id=tenant_id,
+        employee_code=payload.employee_code,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        email=payload.email,
+        department=payload.department,
+        designation=payload.designation
+    )
+    db.add(emp)
+    
+    audit = AuditLog(
+        company_id=tenant_id,
+        user_email=current_user.email,
+        action="EMPLOYEE_MANUALLY_CREATED",
+        details=f"Added employee {emp.employee_code} ({emp.email})"
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(emp)
+    return emp
 
 @router.post("/import/csv")
 async def import_csv_data(

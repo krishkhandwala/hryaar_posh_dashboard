@@ -1,6 +1,6 @@
 ﻿import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -18,6 +18,8 @@ class Company(Base):
     posh_reporting_url = Column(String(500), default="https://forms.gle/posh-report-sample")
     posh_reporting_email = Column(String(255), default="ic-posh@company.com")
     ic_chairperson = Column(String(255), default="Internal Committee Chair")
+    industry = Column(String(100), default="Information Technology")
+    headquarters = Column(String(255), default="Mumbai, India")
     contract_start = Column(DateTime, default=datetime.utcnow)
     contract_end = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -30,6 +32,25 @@ class Company(Base):
     webinars = relationship("Webinar", back_populates="company", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="company", cascade="all, delete-orphan")
     import_jobs = relationship("ImportJob", back_populates="company", cascade="all, delete-orphan")
+    settings = relationship("CompanySettings", back_populates="company", uselist=False, cascade="all, delete-orphan")
+
+
+class CompanySettings(Base):
+    __tablename__ = "company_settings"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), unique=True, nullable=False)
+    passing_threshold_pct = Column(Float, default=70.0)
+    mandate_year = Column(String(50), default="CY 2025-2026")
+    auto_issue_certificates = Column(Boolean, default=True)
+    email_notifications = Column(Boolean, default=True)
+    escalate_non_compliance = Column(Boolean, default=True)
+    escalation_email = Column(String(255), default="compliance-officer@company.com")
+    certificate_prefix = Column(String(50), default="CERT-POSH")
+    allowed_domains = Column(String(500), default="acmecorp.com")
+    sync_frequency = Column(String(50), default="DAILY")
+
+    company = relationship("Company", back_populates="settings")
 
 
 class User(Base):
@@ -39,9 +60,10 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(50), default="HR_ADMIN") # PLATFORM_ADMIN, HR_ADMIN, AUDITOR
+    role = Column(String(50), default="HR_ADMIN") # PLATFORM_ADMIN, HR_ADMIN, AUDITOR, IC_CHAIR
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), nullable=True)
     is_active = Column(Boolean, default=True)
+    last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="users")
@@ -57,12 +79,11 @@ class Employee(Base):
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), index=True, nullable=False)
     department = Column(String(100), index=True, nullable=False, default="General")
-    designation = Column(String(150), nullable=True)
-    gender = Column(String(50), nullable=True)
-    joining_date = Column(DateTime, nullable=True)
-    status = Column(String(50), default="ACTIVE") # ACTIVE, INACTIVE
+    designation = Column(String(150), default="Team Member")
+    gender = Column(String(50), default="Unspecified")
+    status = Column(String(50), default="ACTIVE")
 
-    # PoSH Progress status (denormalized for high performance dashboard queries)
+    # PoSH Progress status
     training_status = Column(String(50), default="NOT_STARTED") # NOT_STARTED, IN_PROGRESS, COMPLETED
     training_progress_pct = Column(Float, default=0.0)
     training_completion_date = Column(DateTime, nullable=True)
@@ -78,7 +99,6 @@ class Employee(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     company = relationship("Company", back_populates="employees")
     training_records = relationship("TrainingRecord", back_populates="employee", cascade="all, delete-orphan")
     assessment_records = relationship("AssessmentRecord", back_populates="employee", cascade="all, delete-orphan")
@@ -90,11 +110,11 @@ class TrainingRecord(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
     employee_id = Column(String, ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False)
-    module_name = Column(String(255), default="PoSH Awareness 2026")
-    source_platform = Column(String(100), default="Leap10x") # Leap10x, CSV, Internal
+    module_name = Column(String(255), default="PoSH Legal Sensitization 2026")
+    source_platform = Column(String(100), default="Leap10x")
     progress_percentage = Column(Float, default=0.0)
     duration_minutes_spent = Column(Integer, default=0)
-    status = Column(String(50), default="NOT_STARTED") # NOT_STARTED, IN_PROGRESS, COMPLETED
+    status = Column(String(50), default="NOT_STARTED")
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -107,13 +127,12 @@ class AssessmentRecord(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
     employee_id = Column(String, ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False)
-    assessment_name = Column(String(255), default="PoSH Compliance Assessment")
+    assessment_name = Column(String(255), default="PoSH Mandatory Statutory Exam")
     score = Column(Float, nullable=False)
     max_score = Column(Float, default=100.0)
     passing_score = Column(Float, default=70.0)
     passed = Column(Boolean, default=False)
     attempt_number = Column(Integer, default=1)
-    weak_topics = Column(Text, nullable=True) # JSON or comma-separated: e.g. "Quid Pro Quo, Bystander Intervention"
     attempted_at = Column(DateTime, default=datetime.utcnow)
 
     employee = relationship("Employee", back_populates="assessment_records")
@@ -125,11 +144,11 @@ class Webinar(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
     title = Column(String(255), nullable=False)
-    speaker = Column(String(255), default="HRYAAR Legal & PoSH Expert")
+    speaker = Column(String(255), default="Advocate & Senior PoSH Master Trainer")
     session_time = Column(DateTime, nullable=False)
     duration_minutes = Column(Integer, default=60)
     meeting_url = Column(String(500), nullable=True)
-    status = Column(String(50), default="SCHEDULED") # SCHEDULED, COMPLETED, CANCELLED
+    status = Column(String(50), default="SCHEDULED")
     attendees_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -144,8 +163,8 @@ class ComplianceDocument(Base):
     title = Column(String(255), nullable=False)
     doc_type = Column(String(100), default="POLICY") # POLICY, ANNUAL_REPORT, IC_CONSTITUTION, NOTICE
     file_path = Column(String(500), nullable=True)
-    file_size_bytes = Column(Integer, default=0)
-    version = Column(String(20), default="1.0")
+    file_size_kb = Column(Integer, default=1420)
+    version = Column(String(20), default="2.1")
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="compliance_docs")
@@ -156,9 +175,9 @@ class ImportJob(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid)
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
-    source = Column(String(50), default="CSV") # CSV, LEAP10X_API
+    source = Column(String(50), default="CSV")
     filename = Column(String(255), nullable=True)
-    status = Column(String(50), default="PENDING") # PENDING, PROCESSING, COMPLETED, FAILED
+    status = Column(String(50), default="PENDING")
     total_rows = Column(Integer, default=0)
     successful_rows = Column(Integer, default=0)
     failed_rows = Column(Integer, default=0)
@@ -175,9 +194,9 @@ class AuditLog(Base):
     company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=True)
     user_id = Column(String, nullable=True)
     user_email = Column(String(255), nullable=True)
-    action = Column(String(100), nullable=False) # e.g. CSV_IMPORT, EXPORT_REPORT, EMPLOYEE_UPDATE
+    action = Column(String(100), nullable=False)
     details = Column(Text, nullable=True)
-    ip_address = Column(String(50), nullable=True)
+    ip_address = Column(String(50), default="127.0.0.1")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="audit_logs")

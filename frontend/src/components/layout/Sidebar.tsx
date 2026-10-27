@@ -1,12 +1,10 @@
 ﻿'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
   Building2,
   Users2,
-  Sparkles,
   Award,
   FileCheck2,
   BarChart3,
@@ -15,7 +13,7 @@ import {
   ShieldCheck,
   LogOut,
   ExternalLink,
-  ChevronRight
+  BookOpen
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -45,24 +43,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       group: 'Governance & People',
       items: [
         { id: 'employees', label: 'Employee Registry', icon: Users2 },
-        { id: 'training', label: 'Training & Modules', icon: Sparkles },
-        { id: 'certificates', label: 'Issued Credentials', icon: Award },
         { id: 'compliance', label: 'Statutory Filings', icon: FileCheck2 },
       ]
     },
     {
-      group: 'Integrations & Ops',
+      group: 'Settings & Policy',
       items: [
-        { id: 'reports', label: 'Audit Analytics', icon: BarChart3 },
-        { id: 'integrations', label: 'LMS Sync & CSV', icon: RefreshCw },
-        { id: 'settings', label: 'Policy Config', icon: Sliders },
+        { id: 'settings', label: 'Company Settings', icon: Sliders },
+        { id: 'audit', label: 'Audit Trail', icon: BarChart3 },
       ]
     }
   ];
 
   return (
     <aside className="w-[260px] h-screen bg-[#061122] text-slate-300 flex flex-col justify-between border-r border-[#12233D] select-none flex-shrink-0 relative overflow-hidden">
-      {/* Ambient glow accent behind logo */}
       <div className="absolute top-0 left-0 w-48 h-48 bg-[#2A62FF]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 flex flex-col h-full overflow-y-auto">
@@ -101,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       key={item.id}
                       onClick={() => setCurrentTab(item.id)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all group relative ${
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all group relative cursor-pointer ${
                         isActive
                           ? 'bg-gradient-to-r from-[#2A62FF] to-[#1E40AF] text-white shadow-[0_4px_16px_rgba(42,98,255,0.35)]'
                           : 'text-slate-300 hover:text-white hover:bg-[#0E213D]'
@@ -152,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={onLogout}
               title="Sign Out"
-              className="p-2 rounded-lg bg-[#0E213D] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all border border-slate-700/50"
+              className="p-2 rounded-lg bg-[#0E213D] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all border border-slate-700/50 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
