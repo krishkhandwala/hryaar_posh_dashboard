@@ -2,6 +2,8 @@
 
 Production-ready, multi-tenant B2B SaaS platform for monitoring corporate Prevention of Sexual Harassment (PoSH) compliance under the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013.
 
+> 📖 **Comprehensive System Manual**: For in-depth architecture diagrams, database dictionaries, operational playbooks, and developer handover documentation, see [COMPLETE_SYSTEM_AND_OPERATIONS_MANUAL.md](COMPLETE_SYSTEM_AND_OPERATIONS_MANUAL.md).
+
 ## Overview & Architecture
 
 HRYAAR Digi-PoSH allows multiple independent organizations to use the same deployed application simultaneously while guaranteeing:
