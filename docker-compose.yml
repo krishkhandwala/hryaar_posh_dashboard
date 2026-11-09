@@ -1,0 +1,165 @@
+version: '3.8'
+
+# ==============================================================================
+# HRYAAR DIGI-POSH: 3-TIER DISTRIBUTED ENTERPRISE SAAS TOPOLOGY
+#
+# Tier 1: Presentation & Ingress (Next.js 16 + Nginx Load Balancer / API Gateway)
+# Tier 2: Application Logic (Clustered FastAPI ASGI Workers + Asynchronous Task Engine)
+# Tier 3: Data Persistence (PostgreSQL Cluster + Redis Distributed Cache + MinIO S3)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # TIER 1: PRESENTATION & INGRESS LAYER
+  # ----------------------------------------------------------------------------
+  nginx-gateway:
+    image: nginx:1.25-alpine
+    container_name: posh-nginx-gateway
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend-api-1
+      - backend-api-2
+    networks:
+      - posh-ingress-net
+      - posh-internal-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: posh-frontend-tier1
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://nginx-gateway/api/v1
+    networks:
+      - posh-ingress-net
+
+  # ----------------------------------------------------------------------------
+  # TIER 2: APPLICATION & BUSINESS LOGIC LAYER (STATELESS CLUSTER)
+  # ----------------------------------------------------------------------------
+  backend-api-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: posh-backend-node-1
+    restart: always
+    environment:
+      - CLUSTER_NODE_ID=node-worker-01
+      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - REDIS_URL=redis://redis-cache:6379/0
+      - STORAGE_PROVIDER=LOCAL
+      - WORKER_CONCURRENCY=8
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - posh-internal-net
+
+  backend-api-2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: posh-backend-node-2
+    restart: always
+    environment:
+      - CLUSTER_NODE_ID=node-worker-02
+      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - REDIS_URL=redis://redis-cache:6379/0
+      - STORAGE_PROVIDER=LOCAL
+      - WORKER_CONCURRENCY=8
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - posh-internal-net
+
+  # Asynchronous Background Worker (Processes batch PDF, LMS ingestion, CSVs)
+  background-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: posh-task-worker
+    restart: always
+    command: ["python", "-m", "app.services.distributed_queue"]
+    environment:
+      - CLUSTER_NODE_ID=task-worker-async-01
+      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - REDIS_URL=redis://redis-cache:6379/0
+    depends_on:
+      - postgres-db
+      - redis-cache
+    networks:
+      - posh-internal-net
+
+  # ----------------------------------------------------------------------------
+  # TIER 3: DATA PERSISTENCE & DISTRIBUTED STORAGE LAYER
+  # ----------------------------------------------------------------------------
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: posh-postgres-tier3
+    restart: always
+    environment:
+      - POSTGRES_DB=posh_saas
+      - POSTGRES_USER=posh_admin
+      - POSTGRES_PASSWORD=PoshSecret2026!
+      - POSTGRES_MAX_CONNECTIONS=200
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posh_admin -d posh_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - posh-internal-net
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: posh-redis-tier3
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - posh-internal-net
+
+  minio-storage:
+    image: minio/minio:RELEASE.2024-01-18T22-51-28Z
+    container_name: posh-minio-tier3
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=posh_s3_admin
+      - MINIO_ROOT_PASSWORD=PoshS3MasterKey2026!
+    volumes:
+      - minio_data:/data
+    networks:
+      - posh-internal-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  posh-ingress-net:
+    driver: bridge
+  posh-internal-net:
+    driver: bridge
+

@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 venv/
 __pycache__/
 *.pyc
@@ -15,3 +15,12 @@ dist/
 out/
 .env*.local
 *.log
+
+# Uploads / Media
+backend/app/static/uploads/*
+!backend/app/static/uploads/.gitkeep
+
+# OS
+desktop.ini
+Thumbs.db
+.DS_Store

@@ -1,10 +1,15 @@
-﻿import hashlib
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Any, Union
 from jose import jwt
 from app.core.config import settings
 
-def create_access_token(subject: Union[str, Any], company_id: Optional[str] = None, role: str = "HR_ADMIN", expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    subject: Union[str, Any],
+    company_id: Optional[str] = None,
+    role: str = "COMPANY_ADMIN",
+    expires_delta: Optional[timedelta] = None
+) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:

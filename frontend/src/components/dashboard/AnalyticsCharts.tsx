@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -12,9 +12,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
 } from 'recharts';
-import { BarChart3, PieChart as PieIcon, ArrowUpRight, Award } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, Award, ShieldCheck, TrendingUp } from 'lucide-react';
 
 interface AnalyticsChartsProps {
   departments: Array<{
@@ -30,38 +29,40 @@ interface AnalyticsChartsProps {
   }>;
 }
 
-const BAND_COLORS = ['#059669', '#2A62FF', '#D97706', '#E11D48'];
+const BAND_COLORS = ['#10B981', '#2A62FF', '#F59E0B', '#EF4444'];
 
 export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
   departments,
   bands,
 }) => {
+  const totalEvaluated = bands.reduce((acc, b) => acc + b.count, 0);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      {/* Department Breakdown (7 Cols) */}
+      {/* 1. Departmental Compliance Bar Chart (7 Cols) */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.15 }}
-        className="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+        className="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between"
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
           <div>
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#2A62FF]" />
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4" />
+              </div>
               <h3 className="font-extrabold text-[#0A192F] text-sm tracking-tight">
-                Departmental Completion Rates
+                Departmental Sensitization Progress
               </h3>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
-              Real-time progress compared against 100% compliance threshold
+              Employee training completion benchmarked against statutory compliance mandate
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-              Benchmark: 100%
-            </span>
-          </div>
+          <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-lg font-mono">
+            Benchmark: 100%
+          </span>
         </div>
 
         <div className="h-72 w-full">
@@ -69,7 +70,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
             <BarChart
               data={departments}
               layout="vertical"
-              margin={{ top: 0, right: 25, left: 20, bottom: 0 }}
+              margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
             >
               <XAxis
                 type="number"
@@ -83,19 +84,25 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                 type="category"
                 dataKey="department"
                 tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
-                width={130}
+                width={140}
                 axisLine={false}
                 tickLine={false}
               />
               <Tooltip
+                cursor={{ fill: '#F8FAFC' }}
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
                     return (
-                      <div className="bg-[#061122] text-white p-3 rounded-xl shadow-xl border border-blue-500/30 text-xs">
+                      <div className="bg-[#0A192F] text-white p-3 rounded-xl shadow-xl border border-slate-700 text-xs">
                         <div className="font-bold text-blue-400 mb-1">{data.department}</div>
-                        <div>Completion: <span className="font-mono font-bold text-white">{data.percentage}%</span></div>
-                        <div className="text-slate-400 text-[11px] mt-0.5">Staff: {data.completed} / {data.total} completed</div>
+                        <div>
+                          Sensitization Rate:{' '}
+                          <span className="font-mono font-black text-white">{data.percentage}%</span>
+                        </div>
+                        <div className="text-slate-400 text-[11px] mt-0.5 font-mono">
+                          {data.completed} of {data.total} employees certified
+                        </div>
                       </div>
                     );
                   }
@@ -105,54 +112,65 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
               <Bar
                 dataKey="percentage"
                 fill="#2A62FF"
-                radius={[0, 6, 6, 0]}
-                barSize={20}
+                radius={[0, 8, 8, 0]}
+                barSize={18}
               />
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#2A62FF]" />
+            <span>% Certified Completion</span>
+          </div>
+          <span className="font-mono font-semibold text-slate-700">
+            {departments.length} Monitored Units
+          </span>
+        </div>
       </motion.div>
 
-      {/* Assessment Score Band Distribution (5 Cols) */}
+      {/* 2. Assessment Score Bands Donut Distribution (5 Cols) */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.22 }}
-        className="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between"
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
           <div>
             <div className="flex items-center gap-2">
-              <PieIcon className="w-4 h-4 text-[#059669]" />
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <PieIcon className="w-4 h-4" />
+              </div>
               <h3 className="font-extrabold text-[#0A192F] text-sm tracking-tight">
-                Assessment Mastery Distribution
+                Exam Score Bands
               </h3>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
-              Employee proficiency segmentation across 4 score tiers
+              Passing benchmark: ≥70% score
             </p>
           </div>
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg font-mono">
+            {totalEvaluated.toLocaleString()} Tested
+          </span>
         </div>
 
-        <div className="h-48 w-full flex items-center justify-center relative">
+        <div className="h-56 relative flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={bands}
+                dataKey="count"
+                nameKey="band"
                 cx="50%"
                 cy="50%"
                 innerRadius={55}
-                outerRadius={80}
+                outerRadius={85}
                 paddingAngle={4}
-                dataKey="count"
               >
                 {bands.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={BAND_COLORS[index % BAND_COLORS.length]}
-                    stroke="#FFFFFF"
-                    strokeWidth={2}
-                  />
+                  <Cell key={`cell-${index}`} fill={BAND_COLORS[index % BAND_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip
@@ -160,10 +178,11 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
                     return (
-                      <div className="bg-[#061122] text-white p-3 rounded-xl shadow-xl border border-blue-500/30 text-xs">
-                        <div className="font-bold text-emerald-400 mb-1">{data.band}</div>
-                        <div>Count: <span className="font-mono font-bold text-white">{data.count} employees</span></div>
-                        <div className="text-slate-400 text-[11px]">Share: {data.percentage}% of test takers</div>
+                      <div className="bg-[#0A192F] text-white p-2.5 rounded-xl shadow-xl text-xs">
+                        <div className="font-bold text-slate-200">{data.band}</div>
+                        <div className="font-mono text-emerald-400 font-bold mt-0.5">
+                          {data.count.toLocaleString()} employees ({data.percentage}%)
+                        </div>
                       </div>
                     );
                   }
@@ -172,30 +191,28 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
               />
             </PieChart>
           </ResponsiveContainer>
-          {/* Centered Pass Badge */}
+
+          {/* Center Callout */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-xl font-black text-[#0A192F] mono-numeric">81.6%</span>
-            <span className="text-[9px] font-extrabold uppercase text-emerald-600 tracking-wider">Pass Rate</span>
+            <span className="text-xl font-black text-[#0A192F] mono-numeric leading-none">
+              {totalEvaluated.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mt-0.5">
+              Attempts
+            </span>
           </div>
         </div>
 
-        {/* Crisp Legend Grid */}
-        <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-100">
-          {bands.map((b, i) => (
-            <div key={b.band} className="p-2 rounded-lg bg-slate-50/70 border border-slate-100 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: BAND_COLORS[i % BAND_COLORS.length] }}
-                />
-                <span className="text-[11px] font-bold text-slate-700 truncate">
-                  {b.band.split(' ')[0]}
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-1 text-[11px]">
-                <span className="font-mono font-black text-[#0A192F]">{b.count}</span>
-                <span className="text-slate-500 text-[10px] font-semibold">{b.percentage}%</span>
-              </div>
+        {/* Legend */}
+        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[11px]">
+          {bands.map((b, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: BAND_COLORS[idx % BAND_COLORS.length] }}
+              />
+              <span className="text-slate-600 truncate text-[11px] font-medium">{b.band}</span>
+              <span className="font-bold font-mono text-[#0A192F] ml-auto">{b.count}</span>
             </div>
           ))}
         </div>

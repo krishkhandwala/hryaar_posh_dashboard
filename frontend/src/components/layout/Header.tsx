@@ -1,112 +1,144 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import {
   Bell,
-  Search,
-  Building,
   Calendar,
-  Sparkles,
-  HelpCircle,
-  Play,
   UploadCloud,
-  ChevronDown,
-  ShieldCheck
+  ArrowLeft,
+  ShieldAlert,
+  Shield,
+  Building
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/brand/CompanyLogo';
 
 interface HeaderProps {
   userName: string;
   userRole: string;
   companyName: string;
-  companies: any[];
-  selectedCompanyId: string;
-  onCompanyChange: (id: string) => void;
+  logoUrl?: string | null;
+  primaryColor?: string;
+  partnerName?: string | null;
+  partnerLogoUrl?: string | null;
+  coBrandingMode?: string | null;
   onImportClick: () => void;
+  isSuperAdminSupervision?: boolean;
+  onReturnToSuperAdmin?: () => void;
+  onNavigateToComplaints?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   userName,
   userRole,
   companyName,
-  companies,
-  selectedCompanyId,
-  onCompanyChange,
+  logoUrl,
+  primaryColor,
+  partnerName,
+  partnerLogoUrl,
+  coBrandingMode = 'CO_BRANDED',
   onImportClick,
+  isSuperAdminSupervision = false,
+  onReturnToSuperAdmin,
+  onNavigateToComplaints,
 }) => {
+  const isCoBranded = partnerName && coBrandingMode === 'CO_BRANDED';
+
   return (
-    <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-7 flex items-center justify-between sticky top-0 z-30 shadow-[0_2px_10px_rgba(0,0,0,0.01)]">
-      <div className="flex items-center gap-4">
-        <div>
-          <h1 className="text-lg font-black text-[#0A192F] tracking-tight">
-            Compliance Dashboard
-          </h1>
-          <div className="text-[10px] text-slate-500 font-semibold tracking-wide flex items-center gap-1.5 -mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Statutory Audit Live View</span>
+    <header className="h-18 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 select-none shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center gap-5">
+        {/* Super Admin Supervision Exit */}
+        {isSuperAdminSupervision && onReturnToSuperAdmin && (
+          <button
+            onClick={onReturnToSuperAdmin}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Return to Hub</span>
+          </button>
+        )}
+
+        <div className="flex items-center gap-3">
+          <CompanyLogo
+            name={companyName}
+            logoUrl={logoUrl}
+            primaryColor={primaryColor}
+            size="md"
+          />
+
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+                {companyName}
+              </h1>
+
+              {/* Co-Branded Partner Pill */}
+              {isCoBranded && (
+                <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 bg-teal-50 text-teal-800 text-xs font-semibold rounded-full border border-teal-200/70">
+                  <CompanyLogo
+                    name={partnerName || 'Partner'}
+                    logoUrl={partnerLogoUrl}
+                    size="xs"
+                    showBorder={false}
+                  />
+                  <span>Managed by {partnerName}</span>
+                </span>
+              )}
+            </div>
+
+            <div className="text-xs text-slate-500 font-medium flex items-center gap-2 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Statutory PoSH Compliance & Audit System</span>
+            </div>
           </div>
         </div>
 
-        {/* Multi-Tenant Organization Switcher */}
-        {userRole === 'PLATFORM_ADMIN' && companies.length > 0 && (
-          <div className="flex items-center gap-2 bg-[#F4F8FD] border border-blue-200/60 rounded-xl px-3 py-1.5 text-xs shadow-sm">
-            <Building className="w-3.5 h-3.5 text-[#2A62FF]" />
-            <span className="font-semibold text-slate-600">Company:</span>
-            <select
-              value={selectedCompanyId}
-              onChange={(e) => onCompanyChange(e.target.value)}
-              className="bg-transparent font-bold text-[#0A192F] outline-none cursor-pointer"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">
+        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-medium">
           <Calendar className="w-3.5 h-3.5 text-slate-500" />
-          <span>CY 2025-2026 Mandate</span>
+          <span>CY 2025–2026 Mandate</span>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Import CSV Trigger */}
+        {/* PoSH IC Hotline */}
+        {onNavigateToComplaints && (
+          <button
+            onClick={onNavigateToComplaints}
+            className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+          >
+            <ShieldAlert className="w-4 h-4 text-rose-600" />
+            <span>IC Register</span>
+          </button>
+        )}
+
+        {/* Import CSV Action */}
         <button
           onClick={onImportClick}
-          className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-[#2A62FF] to-[#1D4ED8] hover:from-[#1D4ED8] hover:to-[#1E40AF] text-white text-xs font-bold rounded-xl shadow-[0_4px_12px_rgba(42,98,255,0.25)] hover:shadow-[0_6px_16px_rgba(42,98,255,0.35)] active:scale-95 transition-all"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
         >
-          <UploadCloud className="w-3.5 h-3.5" />
-          <span>Import LMS CSV</span>
+          <UploadCloud className="w-4 h-4" />
+          <span>Import CSV</span>
         </button>
-
-        {/* Video Tutorial */}
-        <a
-          href="#help"
-          className="hidden sm:flex items-center gap-1.5 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-        >
-          <Play className="w-3 h-3 text-[#2A62FF] fill-current" />
-          <span>Guidance</span>
-        </a>
 
         {/* Notifications */}
-        <button className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl relative transition-colors border border-transparent hover:border-slate-200">
+        <button
+          className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200/80 transition-colors cursor-pointer relative"
+          aria-label="Notifications"
+        >
           <Bell className="w-4 h-4" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-[#2A62FF] rounded-full ring-2 ring-white" />
+          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600" />
         </button>
 
-        {/* Account Pill */}
-        <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#0A192F] to-[#1E3A8A] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-500/20 shadow-sm">
-            {userName ? userName.charAt(0) : 'U'}
+        {/* User Account Tile */}
+        <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow-xs">
+            {userName ? userName.charAt(0).toUpperCase() : 'H'}
           </div>
           <div className="hidden sm:block text-left">
-            <div className="text-xs font-extrabold text-[#0A192F] leading-tight truncate max-w-[140px]">
+            <div className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[140px]">
               {userName}
             </div>
-            <div className="text-[10px] text-slate-500 font-semibold truncate max-w-[140px]">
-              {companyName}
+            <div className="text-[11px] font-medium text-slate-500 mt-0.5">
+              {userRole === 'COMPANY_ADMIN' ? 'HR Administrator' : userRole.replace('_', ' ')}
             </div>
           </div>
         </div>

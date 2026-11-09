@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import { Building2, ShieldCheck, Mail, MapPin, Briefcase, Calendar, CheckCircle2 } from 'lucide-react';
+import { CompanyLogo } from '@/components/brand/CompanyLogo';
 
 interface TenantProfileViewProps {
   company: any;
@@ -13,18 +14,22 @@ export const TenantProfileView: React.FC<TenantProfileViewProps> = ({ company, k
     <div className="space-y-6 max-w-4xl">
       <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
         <div className="flex items-center gap-4 pb-6 border-b border-slate-100">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#2A62FF] to-[#1D4ED8] flex items-center justify-center font-black text-white text-2xl shadow-md border border-blue-400/30">
-            {company?.name ? company.name.charAt(0) : 'C'}
-          </div>
+          <CompanyLogo
+            name={company?.name}
+            slug={company?.slug}
+            logoUrl={company?.logo_url}
+            primaryColor={company?.primary_color}
+            size="lg"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-black text-[#0A192F] tracking-tight">{company?.name}</h2>
               <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-                Active Tenant
+                Statutory Charter Active
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Unique Tenant Identifier: <code className="font-mono text-slate-700 font-bold">{company?.id}</code>
+              Corporate Registry ID: <code className="font-mono text-slate-700 font-bold">{company?.id}</code>
             </p>
           </div>
         </div>
