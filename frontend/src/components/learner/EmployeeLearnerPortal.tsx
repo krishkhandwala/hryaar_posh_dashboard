@@ -213,16 +213,26 @@ export const EmployeeLearnerPortal: React.FC<EmployeeLearnerPortalProps> = ({
       <header className="h-18 bg-white border-b border-slate-200/80 px-6 sm:px-10 flex items-center justify-between sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-4">
           <CompanyLogo
-            name={comp.name || 'Enterprise Client'}
+            name={
+              comp.partner_name && comp.co_branding_mode === 'WHITE_LABEL'
+                ? comp.partner_name
+                : comp.name || 'Enterprise Client'
+            }
             slug={comp.slug}
-            logoUrl={comp.logo_url}
+            logoUrl={
+              comp.partner_name && comp.co_branding_mode === 'WHITE_LABEL'
+                ? comp.partner_logo_url || comp.logo_url
+                : comp.logo_url
+            }
             primaryColor={comp.primary_color}
             size="md"
           />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                {comp.name || 'Enterprise Client'}
+                {comp.partner_name && comp.co_branding_mode === 'WHITE_LABEL'
+                  ? comp.partner_name
+                  : comp.name || 'Enterprise Client'}
               </h1>
               {comp.partner_name && comp.co_branding_mode === 'CO_BRANDED' && (
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200/70">
@@ -233,6 +243,11 @@ export const EmployeeLearnerPortal: React.FC<EmployeeLearnerPortalProps> = ({
                     showBorder={false}
                   />
                   <span>Managed by {comp.partner_name}</span>
+                </span>
+              )}
+              {comp.partner_name && comp.co_branding_mode === 'WHITE_LABEL' && (
+                <span className="hidden sm:inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  {comp.name}
                 </span>
               )}
             </div>

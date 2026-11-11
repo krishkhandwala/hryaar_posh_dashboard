@@ -115,10 +115,6 @@ def get_learner_profile(current_user: User = Depends(get_current_user), db: Sess
         (Employee.email == current_user.email) & (Employee.company_id == current_user.company_id)
     ).first()
 
-    if not emp:
-        # Fallback to look up by user id or create an employee placeholder
-        emp = db.query(Employee).filter(Employee.company_id == current_user.company_id).first()
-
     partner_name = (company.partner.name if (company and company.partner) else (company.partner_name if company else None))
     partner_logo_url = (company.partner.logo_url if (company and company.partner) else (company.partner_logo_url if company else None))
 
@@ -355,13 +351,15 @@ def file_confidential_grievance(
     ).first()
 
     company_id = emp.company_id if emp else current_user.company_id
+    if not company_id:
+        raise HTTPException(status_code=403, detail="User is not linked to any organisation")
     complainant_name = f"{emp.first_name} {emp.last_name}" if emp else current_user.full_name
     complainant_email = emp.email if emp else current_user.email
     dept = emp.department if emp else "General"
 
     complaint_count = db.query(Complaint).filter(Complaint.company_id == company_id).count()
     comp_obj = db.query(Company).filter(Company.id == company_id).first()
-    comp_prefix = (comp_obj.slug[:4].upper() if comp_obj and comp_obj.slug else "ACME")
+    comp_prefix = (comp_obj.slug[:4].upper() if comp_obj and comp_obj.slug else "ORG")
     comp_number = f"IC-{comp_prefix}-CONF-{datetime.utcnow().year}-{complaint_count + 1:04d}"
 
     complaint = Complaint(

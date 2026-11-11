@@ -98,6 +98,22 @@ def create_company(
     if existing:
         raise HTTPException(status_code=400, detail=f"Company with name '{payload.name}' or slug '{slug}' already exists")
 
+    comp_type = (payload.company_type or "CLIENT").upper()
+    if comp_type not in ["PLATFORM", "PARTNER", "CLIENT"]:
+        raise HTTPException(status_code=400, detail="Invalid company_type. Must be PLATFORM, PARTNER, or CLIENT")
+
+    # Enforce strict hierarchy constraints on parent partner_id
+    partner_name = None
+    partner_logo_url = None
+    if payload.partner_id:
+        if comp_type != "CLIENT":
+            raise HTTPException(status_code=400, detail="Only CLIENT organisations can be linked to a partner_id")
+        parent_partner = db.query(Company).filter(Company.id == payload.partner_id).first()
+        if not parent_partner or parent_partner.company_type != "PARTNER":
+            raise HTTPException(status_code=400, detail="Referenced partner_id must belong to an active PARTNER organisation")
+        partner_name = parent_partner.name
+        partner_logo_url = parent_partner.logo_url
+
     # Find or default plan
     plan_id = payload.subscription_plan_id
     if not plan_id:
@@ -121,8 +137,10 @@ def create_company(
         accent_color=payload.accent_color or "#F59E0B",
         sidebar_color=payload.sidebar_color or "#061122",
         welcome_message=payload.welcome_message or f"Welcome to {payload.name} PoSH Compliance Portal",
-        company_type=payload.company_type or "CLIENT",
+        company_type=comp_type,
         partner_id=payload.partner_id,
+        partner_name=partner_name,
+        partner_logo_url=partner_logo_url,
         co_branding_mode=payload.co_branding_mode or "CO_BRANDED",
         assigned_seat_quota=payload.assigned_seat_quota or 1500,
         subscription_plan_id=plan_id,
@@ -152,15 +170,24 @@ def create_company(
         )
         db.add(sub)
 
-    # Optionally create initial company admin
+    # Create initial administrator with the correct organisation-matching role
     if payload.admin_email and payload.admin_password:
+        existing_user = db.query(User).filter(User.email == payload.admin_email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail=f"User with email '{payload.admin_email}' already exists")
+
+        initial_role = "PARTNER_ADMIN" if comp_type == "PARTNER" else ("SUPER_ADMIN" if comp_type == "PLATFORM" else "COMPANY_ADMIN")
+        initial_desig = (
+            "Partner Organisation Administrator" if comp_type == "PARTNER"
+            else ("Platform Systems Administrator" if comp_type == "PLATFORM" else "Corporate PoSH Administrator")
+        )
         admin_user = User(
             email=payload.admin_email,
             full_name=payload.admin_name or f"{payload.name} Administrator",
             hashed_password=get_password_hash(payload.admin_password),
-            role="COMPANY_ADMIN",
-            company_id=company.id,
-            designation="Corporate PoSH Administrator"
+            role=initial_role,
+            company_id=None if comp_type == "PLATFORM" else company.id,
+            designation=initial_desig
         )
         db.add(admin_user)
 
@@ -290,7 +317,22 @@ def update_company(
     if payload.sidebar_color: c.sidebar_color = payload.sidebar_color
     if payload.welcome_message is not None: c.welcome_message = payload.welcome_message
     if payload.subscription_plan_id: c.subscription_plan_id = payload.subscription_plan_id
-    if payload.partner_id is not None: c.partner_id = payload.partner_id
+    if payload.partner_id is not None:
+        if payload.partner_id == "":
+            c.partner_id = None
+            c.partner_name = None
+            c.partner_logo_url = None
+        else:
+            if c.company_type != "CLIENT":
+                raise HTTPException(status_code=400, detail="Only CLIENT organisations can reference a partner_id")
+            if payload.partner_id == c.id:
+                raise HTTPException(status_code=400, detail="Circular hierarchy rejected: company cannot be its own partner")
+            parent_partner = db.query(Company).filter(Company.id == payload.partner_id).first()
+            if not parent_partner or parent_partner.company_type != "PARTNER":
+                raise HTTPException(status_code=400, detail="Target partner_id must be a valid PARTNER organisation")
+            c.partner_id = parent_partner.id
+            c.partner_name = parent_partner.name
+            c.partner_logo_url = parent_partner.logo_url
     if payload.partner_name is not None: c.partner_name = payload.partner_name
     if payload.partner_logo_url is not None: c.partner_logo_url = payload.partner_logo_url
     if payload.co_branding_mode is not None: c.co_branding_mode = payload.co_branding_mode
@@ -375,6 +417,8 @@ async def upload_company_logo(
 
     logo_url = f"/static/uploads/{filename}"
     c.logo_url = logo_url
+    if c.company_type == "PARTNER":
+        db.query(Company).filter(Company.partner_id == c.id).update({"partner_logo_url": logo_url})
 
     audit = AuditLog(
         company_id=c.id,

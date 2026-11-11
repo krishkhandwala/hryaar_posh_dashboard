@@ -41,7 +41,10 @@ export const Header: React.FC<HeaderProps> = ({
   onReturnToSuperAdmin,
   onNavigateToComplaints,
 }) => {
-  const isCoBranded = partnerName && coBrandingMode === 'CO_BRANDED';
+  const isWhiteLabel = Boolean(partnerName && coBrandingMode === 'WHITE_LABEL');
+  const isCoBranded = Boolean(partnerName && coBrandingMode === 'CO_BRANDED');
+  const displayName = isWhiteLabel ? (partnerName || companyName) : companyName;
+  const displayLogo = isWhiteLabel ? (partnerLogoUrl || logoUrl) : logoUrl;
 
   return (
     <header className="h-18 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 select-none shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -59,8 +62,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-3">
           <CompanyLogo
-            name={companyName}
-            logoUrl={logoUrl}
+            name={displayName}
+            logoUrl={displayLogo}
             primaryColor={primaryColor}
             size="md"
           />
@@ -68,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-                {companyName}
+                {displayName}
               </h1>
 
               {/* Co-Branded Partner Pill */}
@@ -81,6 +84,12 @@ export const Header: React.FC<HeaderProps> = ({
                     showBorder={false}
                   />
                   <span>Managed by {partnerName}</span>
+                </span>
+              )}
+
+              {isWhiteLabel && (
+                <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full border border-slate-200">
+                  <span>{companyName}</span>
                 </span>
               )}
             </div>

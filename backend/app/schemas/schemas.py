@@ -9,6 +9,9 @@ class Token(BaseModel):
     email: str
     full_name: str
     role: str
+    workspace: str = "CLIENT_HR_WORKSPACE"
+    permissions: List[str] = []
+    navigation: List[str] = []
     company_id: Optional[str] = None
     company_name: Optional[str] = None
     logo_url: Optional[str] = None

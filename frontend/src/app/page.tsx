@@ -64,17 +64,17 @@ export default function Home() {
 
   // Dashboard Data State
   const [kpis, setKpis] = useState({
-    total_employees: 1250,
-    training_completed: 1050,
-    training_completed_pct: 84.0,
-    assessment_completed: 980,
-    assessment_completed_pct: 78.4,
-    certificates_issued: 1020,
-    certificates_issued_pct: 81.6,
-    compliance_docs: 3,
-    total_complaints: 3,
-    resolved_complaints: 1,
-    ic_members_count: 4,
+    total_employees: 0,
+    training_completed: 0,
+    training_completed_pct: 0,
+    assessment_completed: 0,
+    assessment_completed_pct: 0,
+    certificates_issued: 0,
+    certificates_issued_pct: 0,
+    compliance_docs: 0,
+    total_complaints: 0,
+    resolved_complaints: 0,
+    ic_members_count: 0,
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -111,13 +111,30 @@ export default function Home() {
         password: passwordToUse,
       });
 
-      const { access_token, user: loggedUser } = res.data;
+      const data = res.data;
+      const access_token = data.access_token;
+      const loggedUser = data.user || data;
       localStorage.setItem('posh_token', access_token);
       setToken(access_token);
       setUser(loggedUser);
       setInspectedCompanyId(null);
 
-      if (loggedUser.company_id) {
+      if (loggedUser?.workspace === 'IC_WORKSPACE' || loggedUser?.role === 'IC_MEMBER') {
+        setCurrentTab('complaints');
+      } else {
+        setCurrentTab('dashboard');
+      }
+
+      if (
+        loggedUser?.company_id &&
+        loggedUser?.workspace !== 'INTERNAL_PLATFORM' &&
+        loggedUser?.workspace !== 'PARTNER_WORKSPACE' &&
+        loggedUser?.workspace !== 'LEARNER_WORKSPACE' &&
+        loggedUser?.company_type !== 'PARTNER' &&
+        loggedUser?.role !== 'SUPER_ADMIN' &&
+        loggedUser?.role !== 'PARTNER_ADMIN' &&
+        loggedUser?.role !== 'EMPLOYEE'
+      ) {
         setSelectedCompanyId(loggedUser.company_id);
         loadDashboardData(loggedUser.company_id);
       }
@@ -129,6 +146,7 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    apiClient.post('/auth/logout').catch(() => {});
     localStorage.removeItem('posh_token');
     setToken(null);
     setUser(null);
@@ -140,7 +158,19 @@ export default function Home() {
     try {
       const res = await apiClient.get('/auth/me');
       setUser(res.data);
-      if (res.data.company_id) {
+      if (res.data?.workspace === 'IC_WORKSPACE' || res.data?.role === 'IC_MEMBER') {
+        setCurrentTab('complaints');
+      }
+      if (
+        res.data?.company_id &&
+        res.data?.workspace !== 'INTERNAL_PLATFORM' &&
+        res.data?.workspace !== 'PARTNER_WORKSPACE' &&
+        res.data?.workspace !== 'LEARNER_WORKSPACE' &&
+        res.data?.company_type !== 'PARTNER' &&
+        res.data?.role !== 'SUPER_ADMIN' &&
+        res.data?.role !== 'PARTNER_ADMIN' &&
+        res.data?.role !== 'EMPLOYEE'
+      ) {
         setSelectedCompanyId(res.data.company_id);
         loadDashboardData(res.data.company_id);
       }
@@ -161,7 +191,7 @@ export default function Home() {
           apiClient.get(`/dashboard/stages?company_id=${compId}`).catch(() => ({ data: [] })),
           apiClient.get(`/dashboard/webinars?company_id=${compId}`).catch(() => ({ data: [] })),
           apiClient.get(`/employees?company_id=${compId}`).catch(() => ({ data: [] })),
-          apiClient.get(`/companies/current?company_id=${compId}`).catch(() => ({ data: { name: 'Acme Corporation' } })),
+          apiClient.get(`/companies/current?company_id=${compId}`).catch(() => ({ data: null })),
           apiClient.get(`/companies/current/settings?company_id=${compId}`).catch(() => ({ data: null })),
           apiClient.get(`/documents?company_id=${compId}`).catch(() => ({ data: [] })),
           apiClient.get(`/audit-logs?company_id=${compId}`).catch(() => ({ data: [] })),
@@ -217,18 +247,9 @@ export default function Home() {
         <div className="max-w-md w-full bg-[#0A192F]/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-9 shadow-2xl relative z-10">
           {/* Brand Header */}
           <div className="text-center mb-8">
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-blue-500/20">
-              <ShieldCheck className="w-7 h-7 text-white" />
-            </div>
-            <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">
-              Multi-Tenant SaaS Gateway
-            </div>
             <h2 className="text-2xl font-bold text-white tracking-tight">
-              Enterprise PoSH Platform
+              Enterprise SaaS Platform
             </h2>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013
-            </p>
           </div>
 
           <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
@@ -286,7 +307,8 @@ export default function Home() {
             </button>
           </form>
 
-          {/* 3-Tier Demo Accounts Drawer */}
+          {/* Development Workspace Quick Login Switcher */}
+          {process.env.NODE_ENV !== 'production' && (
           <div className="mt-7 pt-5 border-t border-slate-800">
             <button
               type="button"
@@ -295,7 +317,7 @@ export default function Home() {
             >
               <div className="flex items-center gap-2 font-medium">
                 <KeyRound className="w-4 h-4 text-blue-400" />
-                <span>Fast Login: 3-Tier Demo Accounts</span>
+                <span>Quick Sign-In: Workspace Demo Accounts</span>
               </div>
               {showDemoDrawer ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
             </button>
@@ -308,10 +330,10 @@ export default function Home() {
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-3 space-y-3 overflow-hidden text-left"
                 >
-                  {/* LEVEL 0: PLATFORM CREATOR / HRYAAR TECH PERSON */}
+                  {/* INTERNAL PLATFORM CONSOLE */}
                   <div className="space-y-1">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 px-1 flex items-center justify-between">
-                      <span>Level 0 &bull; HRYAAR Tech Person (Master User)</span>
+                      <span>Internal Platform Administration</span>
                       <span className="text-[9px] text-blue-300 font-mono">tech@hryaar.com</span>
                     </div>
                     <button
@@ -327,24 +349,24 @@ export default function Home() {
                         <CompanyLogo name="HRYAAR" slug="hryaar" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white flex items-center gap-2">
-                            <span>HRYAAR Tech Master Console</span>
+                            <span>HRYAAR Platform Admin</span>
                             <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">Super Admin</span>
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            HRYAAR Tech Lead &bull; Governs Wholesale Middlemen & Tenancy Core
+                            Organisations, Users, Plans &amp; Audit Console
                           </div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                        Tech Master
+                        Platform
                       </span>
                     </button>
                   </div>
 
-                  {/* LEVEL 1: MUTUALLY EXCLUSIVE MIDDLEMEN */}
+                  {/* PARTNER WORKSPACE */}
                   <div className="space-y-1 pt-1">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 px-1">
-                      Level 1 &bull; Middlemen (Assigners)
+                      Partner Client Portfolio Workspaces
                     </div>
                     <button
                       type="button"
@@ -356,18 +378,18 @@ export default function Home() {
                       className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <CompanyLogo name="TalentPro" slug="talentpro" size="sm" />
+                        <CompanyLogo name="LexVantage Advisory LLP" slug="talentpro" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white">
-                            TalentPro HR Advisory
+                            LexVantage Advisory LLP
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            5,000 Quota &bull; Resells to Acme & Nexus
+                            5,000 Seat Licences &bull; Nimbus &amp; Synergia Portfolio
                           </div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        Partner A
+                        Partner
                       </span>
                     </button>
 
@@ -381,26 +403,26 @@ export default function Home() {
                       className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <CompanyLogo name="Apex" slug="apex" size="sm" />
+                        <CompanyLogo name="Meridian Workforce Partners" slug="apex" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white">
-                            Apex Compliance
+                            Meridian Workforce Partners
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            3,000 Quota &bull; Resells to Beta Precision
+                            3,000 Seat Licences &bull; Crestline Precision Portfolio
                           </div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        Partner B
+                        Partner
                       </span>
                     </button>
                   </div>
 
-                  {/* LEVEL 2 & 3: CLIENT END-USERS / HR ANALYTICS */}
+                  {/* CORPORATE HR COMPLIANCE WORKSPACES */}
                   <div className="space-y-1 pt-1">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 px-1">
-                      Level 2 & 3 &bull; Client HR Analytics
+                      Corporate HR Compliance Workspaces
                     </div>
 
                     <button
@@ -413,13 +435,13 @@ export default function Home() {
                       className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <CompanyLogo name="Acme Corporation" slug="acme" size="sm" />
+                        <CompanyLogo name="Nimbus Cloud Systems Pvt. Ltd." slug="acme" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white">
-                            Acme Cloud Systems
+                            Nimbus Cloud Systems Pvt. Ltd.
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            1,250 Learners &bull; Managed by TalentPro
+                            1,250 Learners &bull; Managed by LexVantage
                           </div>
                         </div>
                       </div>
@@ -438,13 +460,13 @@ export default function Home() {
                       className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <CompanyLogo name="Nexus BioHealth" slug="nexusbio" size="sm" />
+                        <CompanyLogo name="Synergia BioSciences Ltd." slug="nexusbio" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white">
-                            Nexus Health & BioSciences
+                            Synergia BioSciences Ltd.
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            450 Learners &bull; Managed by TalentPro
+                            450 Learners &bull; Managed by LexVantage
                           </div>
                         </div>
                       </div>
@@ -463,13 +485,13 @@ export default function Home() {
                       className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <CompanyLogo name="Beta Industries" slug="beta" size="sm" />
+                        <CompanyLogo name="Crestline Precision Engineering" slug="beta" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white">
-                            Beta Precision Manufacturing
+                            Crestline Precision Engineering
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            600 Learners &bull; Managed by Apex
+                            600 Learners &bull; Managed by Meridian
                           </div>
                         </div>
                       </div>
@@ -478,78 +500,37 @@ export default function Home() {
                       </span>
                     </button>
                   </div>
-
-                  {/* LEVEL 3: MANDATED EMPLOYEES / LEARNERS */}
-                  <div className="space-y-1 pt-1">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-violet-400 px-1">
-                      Level 3 &bull; Mandated Employee / Learner Portal
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginEmail('rohan.reddy194@acmecorp.com');
-                        setLoginPassword('Employee@1234');
-                        handleLogin(undefined, 'rohan.reddy194@acmecorp.com', 'Employee@1234');
-                      }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CompanyLogo name="Acme Corporation" slug="acme" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
-                            Rohan Reddy (Acme Employee)
-                          </div>
-                          <div className="text-[11px] text-slate-400">
-                            Code: ACM-1194 &bull; Training in progress
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                        Learner
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginEmail('ananya.mehta1@acmecorp.com');
-                        setLoginPassword('Employee@1234');
-                        handleLogin(undefined, 'ananya.mehta1@acmecorp.com', 'Employee@1234');
-                      }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CompanyLogo name="Acme Corporation" slug="acme" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
-                            Ananya Mehta (Acme Employee)
-                          </div>
-                          <div className="text-[11px] text-slate-400">
-                            Code: ACM-1001 &bull; 100% Certified
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        Certified
-                      </span>
-                    </button>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+          )}
         </div>
       </div>
     );
   }
 
   // ==========================================
-  // VIEW 2: SUPER ADMIN DASHBOARD (LEVEL 0)
+  // VIEW 2: INTERNAL PLATFORM CONSOLE
   // ==========================================
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'PLATFORM_ADMIN';
-  const isPartnerAdmin = user?.role === 'PARTNER_ADMIN';
-  const isEmployee = user?.role === 'EMPLOYEE';
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#061122] flex items-center justify-center text-white text-xs font-semibold">
+        <div className="flex items-center gap-3">
+          <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+          <span>Resolving organisation workspace...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const isSuperAdmin = user?.workspace === 'INTERNAL_PLATFORM' || user?.role === 'SUPER_ADMIN' || user?.role === 'PLATFORM_ADMIN';
+  const isPartnerAdmin =
+    user?.workspace === 'PARTNER_WORKSPACE' ||
+    user?.company_type === 'PARTNER' ||
+    ['PARTNER_ADMIN', 'PARTNER_OPERATIONS', 'PARTNER_SALES', 'PARTNER_VIEWER', 'MIDDLEMAN_ADMIN'].includes(user?.role);
+  const isEmployee = user?.workspace === 'LEARNER_WORKSPACE' || user?.role === 'EMPLOYEE';
+  const canViewGrievances = Boolean(user?.permissions?.includes('ic.grievances.read') || user?.role === 'IC_MEMBER');
 
   if (isSuperAdmin && !inspectedCompanyId) {
     return (
@@ -566,7 +547,7 @@ export default function Home() {
   }
 
   // ==========================================
-  // VIEW 3: MIDDLEMAN PARTNER PORTAL (LEVEL 1)
+  // VIEW 3: PARTNER ORGANISATION WORKSPACE
   // ==========================================
   if (isPartnerAdmin && !inspectedCompanyId) {
     return (
@@ -583,7 +564,7 @@ export default function Home() {
   }
 
   // ==========================================
-  // VIEW 4: EMPLOYEE / LEARNER PORTAL (LEVEL 3)
+  // VIEW 4: EMPLOYEE LEARNING WORKSPACE
   // ==========================================
   if (isEmployee) {
     return (
@@ -595,7 +576,7 @@ export default function Home() {
   }
 
   // ==========================================
-  // VIEW 4: CLIENT DASHBOARD (LEVEL 2 & 3)
+  // VIEW 5: CORPORATE HR / IC WORKSPACE
   // ==========================================
   const activeCompany = currentCompany;
   const primaryBrandColor = activeCompany?.primary_color || '#2A62FF';
@@ -608,11 +589,14 @@ export default function Home() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         userRole={user?.role}
+        workspace={user?.workspace}
+        permissions={user?.permissions || []}
         companyName={activeCompany?.name || user?.company_name || 'Enterprise Client'}
         logoUrl={activeCompany?.logo_url}
         primaryColor={primaryBrandColor}
         sidebarColor={sidebarBrandColor}
         partnerName={activeCompany?.partner_name || user?.partner_name}
+        partnerLogoUrl={activeCompany?.partner_logo_url || user?.partner_logo_url}
         coBrandingMode={activeCompany?.co_branding_mode || user?.co_branding_mode}
         onLogout={handleLogout}
         isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
@@ -633,7 +617,7 @@ export default function Home() {
           onImportClick={() => setIsImportModalOpen(true)}
           isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
           onReturnToSuperAdmin={() => setInspectedCompanyId(null)}
-          onNavigateToComplaints={() => setCurrentTab('complaints')}
+          onNavigateToComplaints={canViewGrievances ? () => setCurrentTab('complaints') : undefined}
         />
 
         <main className="p-8 space-y-7 max-w-7xl w-full mx-auto pb-16">

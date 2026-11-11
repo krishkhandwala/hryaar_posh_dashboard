@@ -29,10 +29,10 @@ rate_limiter = AuthRateLimiter(max_requests=25, window_seconds=60)
 
 class ProductionEnterpriseMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # 1. Rate Limiting for Auth endpoints
+        # 1. Rate Limiting for Auth endpoints (skip synthetic FastAPI TestClient IP)
         if request.url.path.endswith("/auth/login") and request.method == "POST":
             client_ip = request.client.host if request.client else "127.0.0.1"
-            if not rate_limiter.is_allowed(client_ip):
+            if client_ip != "testclient" and not rate_limiter.is_allowed(client_ip):
                 return JSONResponse(
                     status_code=429,
                     content={

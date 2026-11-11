@@ -152,7 +152,8 @@ class Role(Base):
     __tablename__ = "roles"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String(50), unique=True, nullable=False) # SUPER_ADMIN, COMPANY_ADMIN, HR_MANAGER, IC_MEMBER, EMPLOYEE, AUDITOR
+    organisation_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String(50), unique=True, nullable=False) # SUPER_ADMIN, PARTNER_ADMIN, COMPANY_ADMIN, HR_MANAGER, IC_MEMBER, EMPLOYEE
     scope = Column(String(50), default="TENANT") # GLOBAL, TENANT
     description = Column(String(255), nullable=True)
 
@@ -169,8 +170,29 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    role_id = Column(String, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
-    permission_id = Column(String, ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False)
+    role_id = Column(String, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    permission_id = Column(String, ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False, index=True)
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role_id = Column(String, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    organisation_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    jti = Column(String(100), unique=True, index=True, nullable=False)
+    is_revoked = Column(Boolean, default=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class User(Base):

@@ -2,7 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.core.deps import get_current_user, get_tenant_company_id, require_role
+from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_permission
 from app.models.models import (
     User, Company, CompanySettings, Employee, Webinar, ComplianceDocument, 
     AuditLog, ImportJob, Complaint, InternalCommitteeMember
@@ -218,7 +218,7 @@ def update_company_settings(
 def get_dashboard_kpis(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.read"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     total = db.query(Employee).filter(Employee.company_id == tenant_id).count()
@@ -276,7 +276,7 @@ def get_dashboard_kpis(
 def get_department_stats(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.read"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     depts = [d[0] for d in db.query(Employee.department).filter(Employee.company_id == tenant_id).distinct().all()]
@@ -294,7 +294,7 @@ def get_department_stats(
 def get_assessment_bands(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.read"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     total_with_scores = db.query(Employee).filter(
@@ -326,7 +326,7 @@ def get_assessment_bands(
 def get_program_stages(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.read"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     total = db.query(Employee).filter(Employee.company_id == tenant_id).count()
@@ -358,7 +358,7 @@ def get_webinars(
 def mail_all_webinar_attendees(
     webinar_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.training.assign"))
 ):
     """
     Sends webinar broadcast email with joining link and calendar invite
@@ -404,7 +404,7 @@ def trigger_webinar_reminders(
     webinar_id: str,
     payload: dict,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.training.assign"))
 ):
     """
     Triggers or schedules automated reminder emails:
@@ -486,7 +486,7 @@ def list_employees(
     limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.read"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     query = db.query(Employee).filter(Employee.company_id == tenant_id)
@@ -511,18 +511,22 @@ def create_employee(
     payload: EmployeeCreate,
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["PLATFORM_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN", "HR_ADMIN"]))
+    current_user: User = Depends(require_permission("company.employees.create"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     
-    # Check plan quota
+    # Enforce assigned seat quota and plan quota
     comp = db.query(Company).filter(Company.id == tenant_id).first()
-    if comp and comp.plan and comp.plan.max_employees > 0:
+    if comp:
         current_emp_count = db.query(Employee).filter(Employee.company_id == tenant_id).count()
-        if current_emp_count >= comp.plan.max_employees:
+        assigned_quota = comp.assigned_seat_quota if comp.assigned_seat_quota and comp.assigned_seat_quota > 0 else None
+        plan_limit = comp.plan.max_employees if (comp.plan and comp.plan.max_employees > 0) else None
+        effective_limit = min(x for x in [assigned_quota, plan_limit] if x is not None) if (assigned_quota or plan_limit) else None
+
+        if effective_limit is not None and current_emp_count >= effective_limit:
             raise HTTPException(
                 status_code=400,
-                detail=f"Employee quota exceeded for your subscription plan '{comp.plan.display_name}' ({comp.plan.max_employees} limit). Upgrade plan to add more employees."
+                detail=f"Employee seat quota reached ({current_emp_count}/{effective_limit}). Request additional seat licences to add more employees."
             )
 
     existing = db.query(Employee).filter(
@@ -560,7 +564,7 @@ async def import_csv_data(
     file: UploadFile = File(...),
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.employees.import"))
 ):
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     content = await file.read()

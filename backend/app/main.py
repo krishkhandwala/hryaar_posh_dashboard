@@ -14,12 +14,16 @@ from app.api.v1.cluster import router as cluster_router
 from app.api.v1.partner import router as partner_router
 from app.api.v1.learner import router as learner_router
 from app.db.seed import init_db
+from app.db.migrate import run_migrations
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure uploads directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    init_db()
+    if settings.SEED_DEMO_DATA:
+        init_db()
+    else:
+        run_migrations()
     yield
 
 app = FastAPI(
@@ -32,7 +36,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

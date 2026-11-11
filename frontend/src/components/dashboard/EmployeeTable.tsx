@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Search, Filter, Download, CheckCircle2, Clock, UserCheck, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Download, CheckCircle2, Clock, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface EmployeeTableProps {
@@ -34,6 +34,17 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
   setSelectedDept,
   departments,
 }) => {
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedDept, employees.length]);
+
+  const totalPages = Math.max(1, Math.ceil(employees.length / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedEmployees = employees.slice(startIndex, startIndex + pageSize);
+
   const getTrainingBadge = (status: string, pct: number) => {
     if (status === 'COMPLETED') {
       return (
@@ -84,15 +95,14 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
       origin: { y: 0.85 }
     });
 
-    const headers = ['Employee Code', 'Full Name', 'Corporate Email', 'Department', 'Module Progress', 'Assessment Score', 'Certificate Id'];
+    const headers = ['Employee Code', 'Full Name', 'Corporate Email', 'Department', 'Module Progress', 'Assessment Score'];
     const rows = employees.map(e => [
       e.employee_code,
       `"${e.first_name} ${e.last_name}"`,
       e.email,
       e.department,
       `${e.training_progress_pct}%`,
-      e.assessment_score ? `${e.assessment_score}%` : 'N/A',
-      e.certificate_id || 'Pending'
+      e.assessment_score ? `${e.assessment_score}%` : 'N/A'
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -173,12 +183,11 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
               <th className="py-3.5 px-4 font-semibold">Department</th>
               <th className="py-3.5 px-4 font-semibold">Training Status</th>
               <th className="py-3.5 px-4 font-semibold">Assessment</th>
-              <th className="py-3.5 px-4 font-semibold">Certificate ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {employees.length > 0 ? (
-              employees.map((emp) => (
+            {paginatedEmployees.length > 0 ? (
+              paginatedEmployees.map((emp) => (
                 <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3.5 px-4 font-mono font-semibold text-blue-700">
                     {emp.employee_code}
@@ -200,20 +209,11 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
                   <td className="py-3.5 px-4">
                     {getAssessmentBadge(emp.assessment_status, emp.assessment_score)}
                   </td>
-                  <td className="py-3.5 px-4">
-                    {emp.certificate_id ? (
-                      <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                        {emp.certificate_id}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 text-xs font-medium">Pending</span>
-                    )}
-                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-400 font-medium text-sm">
+                <td colSpan={5} className="py-8 text-center text-slate-400 font-medium text-sm">
                   No employee audit records match your search criteria.
                 </td>
               </tr>
@@ -222,9 +222,35 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
         </table>
       </div>
 
-      <div className="pt-2 flex items-center justify-between text-xs text-slate-500 font-medium">
-        <span>Showing {employees.length} records under active statutory mandate</span>
-        <span className="text-slate-600 font-semibold">Section 21 Redressal & Verification Standard</span>
+      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 font-medium">
+        <span>
+          Showing {employees.length === 0 ? 0 : startIndex + 1}&ndash;{Math.min(startIndex + pageSize, employees.length)} of {employees.length.toLocaleString()} records
+        </span>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer inline-flex items-center gap-1"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+            <span className="tabular-nums text-slate-600 px-1">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer inline-flex items-center gap-1"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

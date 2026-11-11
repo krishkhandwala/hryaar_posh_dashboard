@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "HRYAAR Digi-PoSH Multi-Tenant SaaS"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
+    ENVIRONMENT: str = "development"
+    SEED_DEMO_DATA: bool = True
     
     # Secret key for JWT
     SECRET_KEY: str = "hryaar_super_secret_posh_key_2026_production_grade_99x"

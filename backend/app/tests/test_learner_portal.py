@@ -23,7 +23,7 @@ def test_employee_login_and_learner_portal_flow():
     assert profile_res.status_code == 200
     pdata = profile_res.json()
     assert pdata["employee"]["email"] == "rohan.reddy194@acmecorp.com"
-    assert "Acme" in pdata["company"]["name"]
+    assert "Nimbus Cloud" in pdata["company"]["name"]
 
     # 3. Get statutory curriculum modules (/learner/modules)
     modules_res = client.get("/api/v1/learner/modules", headers=headers)
@@ -59,7 +59,7 @@ def test_employee_login_and_learner_portal_flow():
     assert cert_res.status_code == 200
     cert_data = cert_res.json()
     assert cert_data["certificate_id"] == sdata["certificate_id"]
-    assert "Acme" in cert_data["company_name"]
+    assert "Nimbus Cloud" in cert_data["company_name"]
 
     # 7. File confidential inquiry to Internal Committee
     grievance_res = client.post("/api/v1/learner/file-grievance", headers=headers, json={

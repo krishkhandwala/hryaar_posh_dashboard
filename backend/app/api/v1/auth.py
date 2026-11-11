@@ -1,20 +1,27 @@
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models.models import User, Company, AuditLog, Employee
+from app.models.models import User, Company, AuditLog, Employee, UserSession
 from app.schemas.schemas import Token, UserLogin, UserCreate, UserOut
-from app.core.security import verify_password, get_password_hash, create_access_token
-from app.core.deps import get_current_user
+from app.core.security import (
+    verify_password, get_password_hash, create_access_token, needs_password_rehash
+)
+from app.core.config import settings
+from app.core.deps import get_current_user, oauth2_scheme
+from app.core.permissions import resolve_workspace, resolve_navigation, get_user_permissions
 
 router = APIRouter()
 
+
 @router.post("/login", response_model=Token)
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
-    # 1. First check User table
+    # 1. Look up authenticated user by email
     user = db.query(User).filter(User.email == login_data.email).first()
 
-    # 2. If user not found, check Employee table by email or employee_code
+    # 2. First-time employee onboarding via Employee email or employee_code
     emp = None
     if not user:
         emp = db.query(Employee).filter(
@@ -22,9 +29,9 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         ).first()
 
         if emp:
-            # Check standard password for corporate employees
-            valid_passwords = ["Employee@1234", "Posh@1234", "Acme@1234", "Nexus@1234", "Beta@1234"]
-            if login_data.password in valid_passwords:
+            # Allow initial learner self-onboarding with company onboarding passcodes
+            onboarding_passwords = ["Employee@1234", "Posh@1234"]
+            if login_data.password in onboarding_passwords:
                 user = db.query(User).filter(User.email == emp.email).first()
                 if not user:
                     user = User(
@@ -41,17 +48,7 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
                     db.commit()
                     db.refresh(user)
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect corporate email, employee code, or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # If user exists, verify password (or allow standard employee password for employee role)
-    if user.role == "EMPLOYEE" and login_data.password in ["Employee@1234", "Posh@1234", "Acme@1234", "Nexus@1234", "Beta@1234"]:
-        pass # Allow standard employee password
-    elif not verify_password(login_data.password, user.hashed_password):
+    if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect corporate email, employee code, or password",
@@ -60,8 +57,12 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
 
     if not user.is_active or user.status == "SUSPENDED":
         raise HTTPException(status_code=403, detail="Account is deactivated or suspended")
-    
-    # Check tenant company standing
+
+    # Transparent cryptographic upgrade from legacy SHA-256 to salted bcrypt
+    if needs_password_rehash(user.hashed_password):
+        user.hashed_password = get_password_hash(login_data.password)
+
+    # Check tenant organisation standing
     company = None
     if user.company_id:
         company = db.query(Company).filter(Company.id == user.company_id).first()
@@ -72,16 +73,25 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             )
 
     user.last_login_at = datetime.utcnow()
-    
-    # Log audit event
-    audit = AuditLog(
+
+    # Create trackable, revocable UserSession
+    jti = str(uuid.uuid4())
+    session_expires = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    db.add(UserSession(
+        user_id=user.id,
+        jti=jti,
+        is_revoked=False,
+        expires_at=session_expires
+    ))
+
+    # Log authentication audit event
+    db.add(AuditLog(
         company_id=user.company_id,
         actor_user_id=user.id,
         user_email=user.email,
         action="USER_LOGIN_SUCCESS",
         details=f"Successful authentication for role {user.role}"
-    )
-    db.add(audit)
+    ))
     db.commit()
 
     company_name = company.name if company else "HRYAAR Platform"
@@ -91,20 +101,23 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     accent_color = company.accent_color if company else "#F59E0B"
     sidebar_color = company.sidebar_color if company else "#061122"
     welcome_message = company.welcome_message if company else "Welcome to HRYAAR Digi-PoSH"
-    company_type = company.company_type if company else "CLIENT"
+    company_type = company.company_type if company else "PLATFORM"
     partner_id = company.partner_id if company else None
     partner_name = (company.partner.name if (company and company.partner) else (company.partner_name if company else None))
     partner_logo_url = (company.partner.logo_url if (company and company.partner) else (company.partner_logo_url if company else None))
     co_branding_mode = company.co_branding_mode if company else "CO_BRANDED"
 
-    # Employee record metadata if role is EMPLOYEE
+    # Do not expose internal partner hierarchy metadata to ordinary client HR or employee responses
+    if user.role in ["COMPANY_ADMIN", "HR_ADMIN", "HR_MANAGER", "IC_MEMBER", "COMPLIANCE_OFFICER", "EMPLOYEE"]:
+        partner_id = None
+
     emp_code = None
     emp_dept = None
     emp_tr_pct = None
     emp_tr_status = None
     emp_cert_id = None
 
-    if user.role == "EMPLOYEE" or emp:
+    if user.role == "EMPLOYEE":
         if not emp:
             emp = db.query(Employee).filter(
                 (Employee.email == user.email) & (Employee.company_id == user.company_id)
@@ -115,11 +128,16 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             emp_tr_pct = emp.training_progress_pct
             emp_tr_status = emp.training_status
             emp_cert_id = emp.certificate_id
-    
+
+    workspace = resolve_workspace(user.role)
+    permissions = get_user_permissions(user, db)
+    navigation = resolve_navigation(user.role)
+
     access_token = create_access_token(
         subject=user.id,
         company_id=user.company_id,
-        role=user.role
+        role=user.role,
+        jti=jti
     )
     return Token(
         access_token=access_token,
@@ -128,6 +146,9 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
         role=user.role,
+        workspace=workspace,
+        permissions=permissions,
+        navigation=navigation,
         company_id=user.company_id,
         company_name=company_name,
         logo_url=logo_url,
@@ -148,6 +169,44 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         training_status=emp_tr_status,
         certificate_id=emp_cert_id
     )
+
+
+@router.post("/logout")
+def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revokes the current JWT session (via jti) so the token can no longer be used.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        jti = payload.get("jti")
+        if jti:
+            session = db.query(UserSession).filter(UserSession.jti == jti).first()
+            if session:
+                session.is_revoked = True
+            else:
+                db.add(UserSession(
+                    user_id=current_user.id,
+                    jti=jti,
+                    is_revoked=True,
+                    expires_at=datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+                ))
+    except JWTError:
+        pass
+
+    db.add(AuditLog(
+        company_id=current_user.company_id,
+        actor_user_id=current_user.id,
+        user_email=current_user.email,
+        action="USER_LOGOUT",
+        details="User session revoked on logout"
+    ))
+    db.commit()
+    return {"status": "success", "message": "Session revoked successfully"}
+
 
 @router.get("/me")
 def read_current_user(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -184,8 +243,13 @@ def read_current_user(current_user: User = Depends(get_current_user), db: Sessio
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role,
+        "workspace": resolve_workspace(current_user.role),
+        "permissions": get_user_permissions(current_user, db),
+        "navigation": resolve_navigation(current_user.role),
         "company_id": current_user.company_id,
         "company_name": company.name if company else "HRYAAR Platform",
+        "company_slug": company.slug if company else None,
+        "company_type": company.company_type if company else "PLATFORM",
         "logo_url": company.logo_url if company else None,
         "primary_color": company.primary_color if company else "#2A62FF",
         "secondary_color": company.secondary_color if company else "#1D4ED8",

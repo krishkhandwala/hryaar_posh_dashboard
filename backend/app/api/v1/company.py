@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_company_admin
+from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_company_admin, require_permission
+from app.core.permissions import user_has_permission
 from app.core.security import get_password_hash
 from app.core.config import settings
 from app.models.models import (
@@ -338,7 +339,7 @@ def delete_company_user(
 def list_company_complaints(
     status_filter: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["SUPER_ADMIN", "PLATFORM_ADMIN", "COMPANY_ADMIN", "HR_ADMIN", "IC_MEMBER"]))
+    current_user: User = Depends(require_permission("ic.grievances.read"))
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     query = db.query(Complaint).filter(Complaint.company_id == tenant_id)
@@ -353,7 +354,7 @@ def list_company_complaints(
 def file_posh_complaint(
     payload: ComplaintCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_company_admin)
+    current_user: User = Depends(require_role(["SUPER_ADMIN", "PLATFORM_ADMIN", "COMPANY_ADMIN", "HR_ADMIN", "IC_MEMBER"]))
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     comp = db.query(Company).filter(Company.id == tenant_id).first()
@@ -397,7 +398,7 @@ def file_posh_complaint(
 def get_complaint_details(
     complaint_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["SUPER_ADMIN", "PLATFORM_ADMIN", "COMPANY_ADMIN", "HR_ADMIN", "IC_MEMBER"]))
+    current_user: User = Depends(require_permission("ic.grievances.read"))
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     complaint = db.query(Complaint).filter(
@@ -413,7 +414,7 @@ def update_complaint_status(
     complaint_id: str,
     payload: ComplaintUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_company_admin)
+    current_user: User = Depends(require_permission("ic.grievances.update"))
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     complaint = db.query(Complaint).filter(
@@ -563,7 +564,7 @@ def get_company_subscription_details(
 @router.get("/reports/annual-statutory-pdf")
 def download_annual_statutory_pdf(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("company.reports.export"))
 ):
     """
     Generates and downloads the official POSH Section 21 Annual Statutory Compliance PDF.
@@ -602,14 +603,15 @@ def download_annual_statutory_pdf(
             ic_chair_name = m.name
             break
 
+    can_view_grievances = user_has_permission(current_user, "ic.grievances.read", db)
     complaints_rows = db.query(Complaint).filter(Complaint.company_id == tenant_id).all()
     complaints = [
         {
             "complaint_number": c.complaint_number,
             "status": c.status,
-            "is_anonymous": (c.confidentiality_level == "STRICTLY_ANONYMOUS" or "Confidential" in (c.complainant_name or "")),
-            "summary": c.summary or "Confidential inquiry",
-            "action_taken": c.action_taken or "Pending formal inquiry closure",
+            "is_anonymous": True if not can_view_grievances else (c.confidentiality_level == "STRICTLY_ANONYMOUS" or "Confidential" in (c.complainant_name or "")),
+            "summary": (c.summary or "Confidential inquiry") if can_view_grievances else "Redacted (Confidential IC Access Required)",
+            "action_taken": (c.action_taken or "Pending formal inquiry closure") if can_view_grievances else "Confidential Under Section 16",
             "filing_date": c.filing_date.isoformat() if c.filing_date else datetime.utcnow().isoformat()
         }
         for c in complaints_rows

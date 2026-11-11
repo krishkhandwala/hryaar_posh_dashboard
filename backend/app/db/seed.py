@@ -4,9 +4,11 @@ from app.db.session import SessionLocal, Base, engine
 from app.db.migrate import run_migrations
 from app.models.models import (
     Company, CompanySettings, User, Employee, Webinar, ComplianceDocument, 
-    AuditLog, SubscriptionPlan, Subscription, Complaint, InternalCommitteeMember
+    AuditLog, SubscriptionPlan, Subscription, Complaint, InternalCommitteeMember,
+    Role, Permission, RolePermission
 )
 from app.core.security import get_password_hash
+from app.core.permissions import ROLE_PERMISSIONS
 
 def init_db():
     # 1. Run migrations to ensure all tables and columns exist
@@ -69,173 +71,199 @@ def init_db():
 
     # 3. Seed Companies: 3 Standalone Diverse Enterprises
     # -------------------------------------------------------------
-    # Company 1: Acme Corporation (Enterprise Tech - 1,250 staff - Deep Navy)
+    # Company 1: Nimbus Cloud Systems Pvt. Ltd. (Cloud SaaS - 1,250 staff)
     # -------------------------------------------------------------
     acme = db.query(Company).filter(Company.slug == "acme").first()
     if not acme:
         acme = Company(
             id="c-acme-corp-1250",
-            name="Acme Corporation",
+            name="Nimbus Cloud Systems Pvt. Ltd.",
             slug="acme",
+            logo_url="/logos/nimbus.svg",
             is_active=True,
             status="ACTIVE",
-            industry="Enterprise Technology & Cloud Services",
+            industry="Enterprise Cloud & SaaS Infrastructure",
             headquarters="Bandra-Kurla Complex (BKC), Mumbai",
-            contact_email="compliance@acmecorp.com",
+            contact_email="compliance@nimbuscloud.in",
             contact_number="+91 22 6123 4567",
-            posh_reporting_url="https://acme.hryaar.com/posh-report",
-            posh_reporting_email="posh-ic@acmecorp.com",
+            posh_reporting_url="https://nimbuscloud.in/posh-report",
+            posh_reporting_email="posh-ic@nimbuscloud.in",
             ic_chairperson="Adv. Sunita Rao (External Presiding Officer)",
             primary_color="#142D50",
             secondary_color="#2A62FF",
             accent_color="#F2B632",
             sidebar_color="#0B192E",
-            welcome_message="Welcome to Acme Corporation's PoSH Sensitization & Statutory Compliance Workspace",
+            welcome_message="Welcome to Nimbus Cloud Systems PoSH Sensitization & Compliance Workspace",
             subscription_plan_id=ent_plan.id if ent_plan else None,
             subscription_status="ACTIVE"
         )
         db.add(acme)
     else:
+        acme.name = "Nimbus Cloud Systems Pvt. Ltd."
+        acme.logo_url = "/logos/nimbus.svg"
+        acme.industry = "Enterprise Cloud & SaaS Infrastructure"
         if acme.primary_color in (None, "#2A62FF"): acme.primary_color = "#142D50"
         if acme.secondary_color in (None, "#1D4ED8"): acme.secondary_color = "#2A62FF"
         if not acme.accent_color or acme.accent_color == "#F59E0B": acme.accent_color = "#F2B632"
         if not acme.sidebar_color or acme.sidebar_color == "#061122": acme.sidebar_color = "#0B192E"
         if not acme.status: acme.status = "ACTIVE"
-        if not acme.welcome_message or "HRYAAR" in acme.welcome_message: acme.welcome_message = "Welcome to Acme Corporation's PoSH Sensitization & Statutory Compliance Workspace"
+        if "Acme" in (acme.welcome_message or "") or not acme.welcome_message or "HRYAAR" in acme.welcome_message:
+            acme.welcome_message = "Welcome to Nimbus Cloud Systems PoSH Sensitization & Compliance Workspace"
         if ent_plan and not acme.subscription_plan_id: acme.subscription_plan_id = ent_plan.id
 
     # -------------------------------------------------------------
-    # Company 2: Beta Industries (Precision Automotive - 600 staff - Forest Emerald)
+    # Company 2: Crestline Precision Engineering (Precision Automotive - 600 staff)
     # -------------------------------------------------------------
     beta = db.query(Company).filter(Company.slug == "beta").first()
     if not beta:
         beta = Company(
             id="c-beta-ind-600",
-            name="Beta Industries",
+            name="Crestline Precision Engineering",
             slug="beta",
+            logo_url="/logos/crestline.svg",
             is_active=True,
             status="ACTIVE",
             industry="Precision Automotive & Heavy Manufacturing",
             headquarters="MIDC Industrial Area, Pune",
-            contact_email="support@betaind.com",
+            contact_email="compliance@crestline.in",
             contact_number="+91 20 4123 8899",
-            posh_reporting_url="https://beta.hryaar.com/posh-report",
-            posh_reporting_email="posh-ic@betaind.com",
+            posh_reporting_url="https://crestline.in/posh-report",
+            posh_reporting_email="posh-ic@crestline.in",
             ic_chairperson="Dr. Meera Iyer (External Presiding Officer)",
             primary_color="#065F46",
             secondary_color="#10B981",
             accent_color="#F59E0B",
             sidebar_color="#064E3B",
-            welcome_message="Beta Industries Corporate PoSH & Safer Workplaces Management Portal",
+            welcome_message="Crestline Precision Engineering Workplace Safety & Compliance Portal",
             subscription_plan_id=pro_plan.id if pro_plan else None,
             subscription_status="ACTIVE"
         )
         db.add(beta)
     else:
+        beta.name = "Crestline Precision Engineering"
+        beta.logo_url = "/logos/crestline.svg"
         if beta.primary_color in (None, "#2A62FF"): beta.primary_color = "#065F46"
         if beta.secondary_color in (None, "#1D4ED8"): beta.secondary_color = "#10B981"
         if not beta.accent_color or beta.accent_color == "#F59E0B": beta.accent_color = "#F59E0B"
         if not beta.sidebar_color or beta.sidebar_color == "#061122": beta.sidebar_color = "#064E3B"
         if not beta.status: beta.status = "ACTIVE"
-        if not beta.welcome_message or "HRYAAR" in beta.welcome_message: beta.welcome_message = "Beta Industries Corporate PoSH & Safer Workplaces Management Portal"
+        if "Beta" in (beta.welcome_message or "") or not beta.welcome_message or "HRYAAR" in beta.welcome_message:
+            beta.welcome_message = "Crestline Precision Engineering Workplace Safety & Compliance Portal"
         if pro_plan and not beta.subscription_plan_id: beta.subscription_plan_id = pro_plan.id
 
     # -------------------------------------------------------------
-    # Company 3: Nexus Health & BioSciences (Biotech / Pharma - 450 staff - Royal Violet)
+    # Company 3: Synergia BioSciences Ltd. (Biotech / Pharma - 450 staff)
     # -------------------------------------------------------------
     nexus = db.query(Company).filter(Company.slug == "nexusbio").first()
     if not nexus:
         nexus = Company(
             id="c-nexus-bio-450",
-            name="Nexus Health & BioSciences",
+            name="Synergia BioSciences Ltd.",
             slug="nexusbio",
+            logo_url="/logos/synergia.svg",
             is_active=True,
             status="ACTIVE",
             industry="Clinical Therapeutics & Biotechnology",
             headquarters="HITEC City, Hyderabad, Telangana",
-            contact_email="ethics-posh@nexusbio.com",
+            contact_email="ethics@synergiabio.in",
             contact_number="+91 40 4567 8900",
-            posh_reporting_url="https://nexusbio.hryaar.com/posh-report",
-            posh_reporting_email="posh-ic@nexusbio.com",
+            posh_reporting_url="https://synergiabio.in/posh-report",
+            posh_reporting_email="posh-ic@synergiabio.in",
             ic_chairperson="Adv. Rohini Deshmukh (High Court Senior Counsel)",
             primary_color="#5B21B6",
             secondary_color="#8B5CF6",
             accent_color="#EC4899",
             sidebar_color="#2E1065",
-            welcome_message="Nexus BioSciences Workplace Dignity & Mandatory PoSH Portal",
+            welcome_message="Synergia BioSciences Workplace Dignity & Compliance Portal",
             subscription_plan_id=pro_plan.id if pro_plan else None,
             subscription_status="ACTIVE"
         )
         db.add(nexus)
+    else:
+        nexus.name = "Synergia BioSciences Ltd."
+        nexus.logo_url = "/logos/synergia.svg"
+        nexus.welcome_message = "Synergia BioSciences Workplace Dignity & Compliance Portal"
 
     # -------------------------------------------------------------
-    # MIDDLEMAN / PARTNER COMPANIES (Level 1: The Assigners / Resellers)
+    # PARTNER COMPANIES (Client Portfolio & Licence Assigners)
     # -------------------------------------------------------------
-    # Partner 1: TalentPro HR Advisory (Assigner for Acme Cloud & Nexus Bio)
     talentpro = db.query(Company).filter(Company.slug == "talentpro").first()
     if not talentpro:
         talentpro = Company(
             id="p-talentpro-hr",
-            name="TalentPro HR Advisory & Legal",
+            name="LexVantage Advisory LLP",
             slug="talentpro",
+            logo_url="/logos/lexvantage.svg",
             company_type="PARTNER",
             is_active=True,
             status="ACTIVE",
-            industry="Human Resources & Statutory Legal Advisory",
+            industry="Corporate Legal & HR Compliance Advisory",
             headquarters="Cyber City, Gurugram, India",
-            contact_email="partnerships@talentpro.com",
+            contact_email="partnerships@lexvantage.in",
             contact_number="+91 124 456 7890",
             primary_color="#0F766E",
             secondary_color="#0D9488",
             accent_color="#F59E0B",
             sidebar_color="#042F2E",
-            welcome_message="TalentPro Partner Management Hub — Corporate Compliance Portfolio",
+            welcome_message="LexVantage Partner Hub — Corporate Compliance Portfolio",
             assigned_seat_quota=5000,
             subscription_plan_id=ent_plan.id if ent_plan else None,
             subscription_status="ACTIVE"
         )
         db.add(talentpro)
+    else:
+        talentpro.name = "LexVantage Advisory LLP"
+        talentpro.logo_url = "/logos/lexvantage.svg"
+        talentpro.industry = "Corporate Legal & HR Compliance Advisory"
+        talentpro.welcome_message = "LexVantage Partner Hub — Corporate Compliance Portfolio"
 
-    # Partner 2: Apex Corporate Compliance Partners (Assigner for Beta Industries)
     apex = db.query(Company).filter(Company.slug == "apex").first()
     if not apex:
         apex = Company(
             id="p-apex-compliance",
-            name="Apex Corporate Compliance Partners",
+            name="Meridian Workforce Partners",
             slug="apex",
+            logo_url="/logos/meridian.svg",
             company_type="PARTNER",
             is_active=True,
             status="ACTIVE",
             industry="Enterprise Risk & Governance Consulting",
             headquarters="Whitefield, Bengaluru, India",
-            contact_email="advisory@apexcompliance.com",
+            contact_email="advisory@meridianpartners.in",
             contact_number="+91 80 2345 6789",
             primary_color="#334155",
             secondary_color="#475569",
             accent_color="#F59E0B",
             sidebar_color="#0F172A",
-            welcome_message="Apex Compliance Channel Operations Hub",
+            welcome_message="Meridian Workforce Client Operations Hub",
             assigned_seat_quota=3000,
             subscription_plan_id=ent_plan.id if ent_plan else None,
             subscription_status="ACTIVE"
         )
         db.add(apex)
+    else:
+        apex.name = "Meridian Workforce Partners"
+        apex.logo_url = "/logos/meridian.svg"
+        apex.welcome_message = "Meridian Workforce Client Operations Hub"
 
     db.commit()
 
-    # Link Clients to their Respective Mutually Exclusive Middleman Partners
+    # Link Clients to their Respective Mutually Exclusive Partners
     acme.partner_id = "p-talentpro-hr"
-    acme.partner_name = "TalentPro HR Advisory & Legal"
+    acme.partner_name = "LexVantage Advisory LLP"
+    acme.partner_logo_url = "/logos/lexvantage.svg"
     acme.co_branding_mode = "CO_BRANDED"
     acme.company_type = "CLIENT"
 
     nexus.partner_id = "p-talentpro-hr"
-    nexus.partner_name = "TalentPro HR Advisory & Legal"
+    nexus.partner_name = "LexVantage Advisory LLP"
+    nexus.partner_logo_url = "/logos/lexvantage.svg"
     nexus.co_branding_mode = "CO_BRANDED"
     nexus.company_type = "CLIENT"
 
-    beta.partner_id = "p-apex-compliance"
-    beta.partner_name = "Apex Corporate Compliance Partners"
+    beta.partner_id = apex.id
+    beta.partner_name = "Meridian Workforce Partners"
+    beta.partner_logo_url = "/logos/meridian.svg"
     beta.co_branding_mode = "CO_BRANDED"
     beta.company_type = "CLIENT"
     db.commit()
@@ -306,8 +334,8 @@ def init_db():
         )
         db.add(super_admin)
     else:
-        super_admin.full_name = "HRYAAR Lead Tech Architect (Master)"
-        super_admin.designation = "Lead Systems Architect & Tech Creator"
+        super_admin.full_name = "Platform Administrator"
+        super_admin.designation = "Platform Administration"
         super_admin.role = "SUPER_ADMIN"
         super_admin.status = "ACTIVE"
         super_admin.is_active = True
@@ -317,18 +345,18 @@ def init_db():
     if not tech_admin:
         tech_admin = User(
             email="tech@hryaar.com",
-            full_name="HRYAAR Lead Tech Architect (Master)",
+            full_name="HRYAAR Platform Admin",
             hashed_password=get_password_hash("Admin@1234"),
             role="SUPER_ADMIN",
             company_id=None,
-            designation="Lead Systems Architect & Tech Creator",
+            designation="Platform Administrator",
             is_active=True,
             status="ACTIVE"
         )
         db.add(tech_admin)
     else:
-        tech_admin.full_name = "HRYAAR Lead Tech Architect (Master)"
-        tech_admin.designation = "Lead Systems Architect & Tech Creator"
+        tech_admin.full_name = "HRYAAR Platform Admin"
+        tech_admin.designation = "Platform Administrator"
         tech_admin.role = "SUPER_ADMIN"
         tech_admin.status = "ACTIVE"
         tech_admin.is_active = True
@@ -337,7 +365,7 @@ def init_db():
     if not acme_admin:
         acme_admin = User(
             email="hr@acme.com",
-            full_name="Pooja Sharma (Acme HR Lead)",
+            full_name="Pooja Sharma (Nimbus Cloud HR Lead)",
             hashed_password=get_password_hash("Acme@1234"),
             role="COMPANY_ADMIN",
             company_id=acme.id,
@@ -346,12 +374,14 @@ def init_db():
             status="ACTIVE"
         )
         db.add(acme_admin)
+    else:
+        acme_admin.full_name = "Pooja Sharma (Nimbus Cloud HR Lead)"
 
     beta_admin = db.query(User).filter(User.email == "hr@beta.com").first()
     if not beta_admin:
         beta_admin = User(
             email="hr@beta.com",
-            full_name="Rajesh Verma (Beta HR Manager)",
+            full_name="Rajesh Verma (Crestline HR Manager)",
             hashed_password=get_password_hash("Beta@1234"),
             role="COMPANY_ADMIN",
             company_id=beta.id,
@@ -360,12 +390,14 @@ def init_db():
             status="ACTIVE"
         )
         db.add(beta_admin)
+    else:
+        beta_admin.full_name = "Rajesh Verma (Crestline HR Manager)"
 
     nexus_admin = db.query(User).filter(User.email == "hr@nexusbio.com").first()
     if not nexus_admin:
         nexus_admin = User(
             email="hr@nexusbio.com",
-            full_name="Dr. Aruna Chatterjee (Nexus Ethics Lead)",
+            full_name="Dr. Aruna Chatterjee (Synergia Ethics Lead)",
             hashed_password=get_password_hash("Nexus@1234"),
             role="COMPANY_ADMIN",
             company_id=nexus.id,
@@ -374,13 +406,15 @@ def init_db():
             status="ACTIVE"
         )
         db.add(nexus_admin)
+    else:
+        nexus_admin.full_name = "Dr. Aruna Chatterjee (Synergia Ethics Lead)"
 
-    # Middleman / Partner Admins (Level 1: Assigners)
+    # Partner Admins
     talentpro_admin = db.query(User).filter(User.email == "partner@talentpro.com").first()
     if not talentpro_admin:
         talentpro_admin = User(
             email="partner@talentpro.com",
-            full_name="Karan Oberoi (TalentPro Partner Lead)",
+            full_name="Karan Oberoi (LexVantage Managing Partner)",
             hashed_password=get_password_hash("Partner@1234"),
             role="PARTNER_ADMIN",
             company_id=talentpro.id,
@@ -389,12 +423,14 @@ def init_db():
             status="ACTIVE"
         )
         db.add(talentpro_admin)
+    else:
+        talentpro_admin.full_name = "Karan Oberoi (LexVantage Managing Partner)"
 
     apex_admin = db.query(User).filter(User.email == "partner@apex.com").first()
     if not apex_admin:
         apex_admin = User(
             email="partner@apex.com",
-            full_name="Vikram Malhotra (Apex Compliance Principal)",
+            full_name="Vikram Malhotra (Meridian Partner Director)",
             hashed_password=get_password_hash("Partner@1234"),
             role="PARTNER_ADMIN",
             company_id=apex.id,
@@ -403,6 +439,59 @@ def init_db():
             status="ACTIVE"
         )
         db.add(apex_admin)
+    else:
+        apex_admin.full_name = "Vikram Malhotra (Meridian Partner Director)"
+
+    # Seed Internal Committee (IC_MEMBER) Accounts (Strict Grievance Confidentiality)
+    ic_accounts = [
+        ("ic@acme.com", "Adv. Sunita Rao (Nimbus Cloud IC Chair)", acme.id),
+        ("ic@beta.com", "Dr. Meera Iyer (Crestline IC Chair)", beta.id),
+        ("ic@nexusbio.com", "Adv. Rohini Deshmukh (Synergia IC Chair)", nexus.id),
+    ]
+    for ic_email, ic_name, ic_comp_id in ic_accounts:
+        ic_user = db.query(User).filter(User.email == ic_email).first()
+        if not ic_user:
+            db.add(User(
+                email=ic_email,
+                full_name=ic_name,
+                hashed_password=get_password_hash("Ic@1234"),
+                role="IC_MEMBER",
+                company_id=ic_comp_id,
+                designation="Presiding Officer — Internal Committee",
+                is_active=True,
+                status="ACTIVE"
+            ))
+        else:
+            ic_user.full_name = ic_name
+
+    # Sync Granular RBAC Roles & Permissions Matrix
+    all_perm_keys = sorted({p for plist in ROLE_PERMISSIONS.values() for p in plist})
+    perm_map = {}
+    for pkey in all_perm_keys:
+        p_obj = db.query(Permission).filter(Permission.permission_key == pkey).first()
+        if not p_obj:
+            p_obj = Permission(permission_key=pkey, description=f"Permission: {pkey}")
+            db.add(p_obj)
+            db.flush()
+        perm_map[pkey] = p_obj
+
+    for rname, pkeys in ROLE_PERMISSIONS.items():
+        r_obj = db.query(Role).filter(Role.name == rname).first()
+        if not r_obj:
+            r_obj = Role(
+                name=rname,
+                scope="GLOBAL" if rname in ["SUPER_ADMIN", "PLATFORM_ADMIN"] else "TENANT",
+                description=f"System role: {rname}"
+            )
+            db.add(r_obj)
+            db.flush()
+        existing_links = {
+            rp.permission_id for rp in db.query(RolePermission).filter(RolePermission.role_id == r_obj.id).all()
+        }
+        for pk in pkeys:
+            pid = perm_map[pk].id
+            if pid not in existing_links:
+                db.add(RolePermission(role_id=r_obj.id, permission_id=pid))
 
     db.commit()
 
@@ -606,6 +695,88 @@ def init_db():
 
         db.bulk_save_objects(nexus_employees)
         db.commit()
+
+    # 5. Seed Nimbus Cloud (acme, 1,250 employees) & Crestline (beta, 600 employees)
+    if db.query(InternalCommitteeMember).filter(InternalCommitteeMember.company_id == acme.id).count() == 0:
+        db.add_all([
+            InternalCommitteeMember(company_id=acme.id, name="Adv. Sunita Rao", email="sunita.rao@legalcounsel.in", role_in_committee="PRESIDING_OFFICER", designation="External IC Presiding Officer", is_external=True),
+            InternalCommitteeMember(company_id=acme.id, name="Pooja Sharma", email="pooja.sharma@acmecorp.com", role_in_committee="INTERNAL_MEMBER", designation="CHRO", is_external=False),
+            InternalCommitteeMember(company_id=acme.id, name="Arjun Mehta", email="arjun.mehta@acmecorp.com", role_in_committee="INTERNAL_MEMBER", designation="VP Engineering", is_external=False),
+            InternalCommitteeMember(company_id=acme.id, name="Kavita Krishnan", email="kavita@safetyfoundation.org", role_in_committee="EXTERNAL_MEMBER", designation="NGO Advisor", is_external=True),
+        ])
+    if db.query(InternalCommitteeMember).filter(InternalCommitteeMember.company_id == beta.id).count() == 0:
+        db.add_all([
+            InternalCommitteeMember(company_id=beta.id, name="Dr. Meera Iyer", email="meera.iyer@legaladvisory.in", role_in_committee="PRESIDING_OFFICER", designation="External Presiding Officer", is_external=True),
+            InternalCommitteeMember(company_id=beta.id, name="Rajesh Verma", email="rajesh.verma@betaind.com", role_in_committee="INTERNAL_MEMBER", designation="Head of Employee Relations", is_external=False),
+            InternalCommitteeMember(company_id=beta.id, name="Neha Deshpande", email="neha@betaind.com", role_in_committee="INTERNAL_MEMBER", designation="Plant Safety Lead", is_external=False),
+        ])
+    if db.query(Complaint).filter(Complaint.company_id == acme.id).count() == 0:
+        db.add_all([
+            Complaint(company_id=acme.id, complaint_number="POSH-ACME-2026-001", incident_date=datetime.utcnow() - timedelta(days=30), complainant_name="Confidential Staff N-01", complainant_department="Engineering", respondent_name="Senior Lead", respondent_department="Engineering", status="RESOLVED", summary="Inappropriate remarks during project review.", action_taken="Formal warning issued per IC inquiry report.", assigned_ic_chair="Adv. Sunita Rao", confidentiality_level="STRICT_IC_CONFIDENTIAL", filing_date=datetime.utcnow() - timedelta(days=28), resolution_date=datetime.utcnow() - timedelta(days=10)),
+            Complaint(company_id=acme.id, complaint_number="POSH-ACME-2026-002", incident_date=datetime.utcnow() - timedelta(days=12), complainant_name="Confidential Staff N-02", complainant_department="Sales & Marketing", respondent_name="Account Manager", respondent_department="Sales & Marketing", status="UNDER_INQUIRY", summary="Hostile communication after working hours.", assigned_ic_chair="Adv. Sunita Rao", confidentiality_level="STRICT_IC_CONFIDENTIAL", filing_date=datetime.utcnow() - timedelta(days=10)),
+        ])
+    if db.query(Complaint).filter(Complaint.company_id == beta.id).count() == 0:
+        db.add(Complaint(company_id=beta.id, complaint_number="POSH-BETA-2026-001", incident_date=datetime.utcnow() - timedelta(days=20), complainant_name="Confidential Staff C-01", complainant_department="Manufacturing Ops", respondent_name="Shift Supervisor", respondent_department="Manufacturing Ops", status="CLOSED", summary="Shopfloor verbal misconduct reported.", action_taken="Conciliation completed with mandatory training.", assigned_ic_chair="Dr. Meera Iyer", confidentiality_level="STRICT_IC_CONFIDENTIAL", filing_date=datetime.utcnow() - timedelta(days=18), resolution_date=datetime.utcnow() - timedelta(days=4)))
+    if db.query(Webinar).filter(Webinar.company_id == acme.id).count() == 0:
+        db.add_all([
+            Webinar(company_id=acme.id, title="Workplace Respect & Digital PoSH Boundaries", speaker="Adv. Sunita Rao (Presiding Officer)", session_time=datetime.utcnow() + timedelta(days=7, hours=2), duration_minutes=60, meeting_url="https://meet.google.com/nimbus-posh-live", attendees_count=890, auto_reminder_7d_enabled=True, auto_reminder_2d_enabled=True),
+            Webinar(company_id=acme.id, title="Manager Sensitization & Bystander Action", speaker="Pooja Sharma (CHRO)", session_time=datetime.utcnow() + timedelta(days=2, hours=3), duration_minutes=60, meeting_url="https://meet.google.com/nimbus-managers-posh", attendees_count=410, auto_reminder_7d_enabled=True, auto_reminder_2d_enabled=True),
+        ])
+    if db.query(ComplianceDocument).filter(ComplianceDocument.company_id == acme.id).count() == 0:
+        db.add_all([
+            ComplianceDocument(company_id=acme.id, title="Nimbus Cloud Systems PoSH Policy 2026", doc_type="STATUTORY_POLICY", file_size_kb=1420, version="3.0"),
+            ComplianceDocument(company_id=acme.id, title="Internal Committee Constitution Charter", doc_type="IC_CONSTITUTION", file_size_kb=820, version="2.1"),
+            ComplianceDocument(company_id=acme.id, title="Section 21 Annual Statutory Return FY25-26", doc_type="ANNUAL_RETURN", file_size_kb=960, version="1.0"),
+        ])
+    db.commit()
+
+    def _seed_cohort(company_obj, count, prefix, offset, domain, cert_prefix, pass_pct_threshold):
+        if db.query(Employee).filter(Employee.company_id == company_obj.id).count() > 0:
+            return
+        depts = ["Human Resources", "Sales & Marketing", "Finance & Operations", "Product Design", "Legal & Compliance", "Engineering"]
+        fnames = ["Ananya", "Rohan", "Priya", "Vikram", "Sneha", "Karan", "Neha", "Amit", "Divya", "Siddharth"]
+        lnames = ["Mehta", "Reddy", "Kapoor", "Deshmukh", "Chopra", "Iyer", "Nair", "Bansal"]
+        random.seed(42 + offset)
+        batch = []
+        for idx in range(1, count + 1):
+            fn = fnames[(idx - 1) % len(fnames)]
+            ln = "Reddy" if (company_obj.id == acme.id and idx == 194) else lnames[((idx - 1) // len(fnames)) % len(lnames)]
+            if company_obj.id == acme.id and idx == 194:
+                fn = "Rohan"
+            dept = depts[(idx - 1) % len(depts)]
+            code = f"{prefix}-{offset + idx}"
+            email = f"{fn.lower()}.{ln.lower()}{idx}@{domain}"
+            completed = (idx % 100) < pass_pct_threshold
+            in_prog = not completed and (idx % 100) < 94
+            tr_status = "COMPLETED" if completed else ("IN_PROGRESS" if in_prog else "NOT_STARTED")
+            tr_pct = 100.0 if completed else (round(random.uniform(35.0, 85.0), 1) if in_prog else 0.0)
+            score = round(random.uniform(76.0, 99.0), 1) if completed else (62.0 if (in_prog and idx % 2 == 0) else None)
+            as_status = "PASSED" if completed else ("FAILED" if score else "NOT_ATTEMPTED")
+            cert_status = "ISSUED" if completed else "PENDING"
+            cert_id = f"{cert_prefix}-{code}" if completed else None
+            batch.append(Employee(
+                company_id=company_obj.id,
+                employee_code=code,
+                first_name=fn,
+                last_name=ln,
+                email=email,
+                department=dept,
+                designation="Senior Specialist" if idx % 4 == 0 else "Associate",
+                training_status=tr_status,
+                training_progress_pct=tr_pct,
+                training_completion_date=datetime.utcnow() - timedelta(days=random.randint(1, 20)) if completed else None,
+                assessment_status=as_status,
+                assessment_score=score,
+                assessment_date=datetime.utcnow() - timedelta(days=random.randint(1, 15)) if score else None,
+                certificate_status=cert_status,
+                certificate_id=cert_id,
+                certificate_issued_at=datetime.utcnow() - timedelta(days=random.randint(1, 10)) if completed else None,
+            ))
+        db.bulk_save_objects(batch)
+        db.commit()
+
+    _seed_cohort(acme, 1250, "ACM", 1000, "acmecorp.com", "CERT-ACME", 84)
+    _seed_cohort(beta, 600, "BET", 2000, "betaind.com", "CERT-BETA", 78)
 
     db.close()
     print("Multi-tenant database initialized and populated with Acme, Beta, and Nexus BioSciences successfully!")

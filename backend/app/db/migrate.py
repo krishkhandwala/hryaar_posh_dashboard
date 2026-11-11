@@ -53,11 +53,14 @@ def run_migrations():
             res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users'"))
             existing_cols_user = [row[0] for row in res.fetchall()]
 
+        dt_type = "DATETIME" if is_sqlite else "TIMESTAMP"
+        bool_true = "1" if is_sqlite else "TRUE"
+
         user_cols = [
             ("designation", "VARCHAR(150)", "'Corporate Administrator'"),
             ("phone", "VARCHAR(50)", "NULL"),
             ("status", "VARCHAR(50)", "'ACTIVE'"),
-            ("updated_at", "DATETIME", "NULL")
+            ("updated_at", dt_type, "NULL")
         ]
 
         for col_name, col_type, default_val in user_cols:
@@ -89,16 +92,35 @@ def run_migrations():
             existing_cols_webinars = [row[0] for row in res.fetchall()]
 
         webinar_cols = [
-            ("auto_reminder_7d_enabled", "BOOLEAN", "1"),
-            ("auto_reminder_2d_enabled", "BOOLEAN", "1"),
-            ("reminder_7d_sent_at", "DATETIME", "NULL"),
-            ("reminder_2d_sent_at", "DATETIME", "NULL"),
-            ("last_broadcast_email_sent_at", "DATETIME", "NULL"),
+            ("auto_reminder_7d_enabled", "BOOLEAN", bool_true),
+            ("auto_reminder_2d_enabled", "BOOLEAN", bool_true),
+            ("reminder_7d_sent_at", dt_type, "NULL"),
+            ("reminder_2d_sent_at", dt_type, "NULL"),
+            ("last_broadcast_email_sent_at", dt_type, "NULL"),
             ("total_emails_dispatched", "INTEGER", "0")
         ]
 
         for col_name, col_type, default_val in webinar_cols:
             if col_name not in existing_cols_webinars:
                 conn.execute(text(f"ALTER TABLE webinars ADD COLUMN {col_name} {col_type} DEFAULT {default_val}"))
+
+        # Check roles table columns (Phase 1 RBAC evolution)
+        if is_sqlite:
+            existing_cols_roles = [row[1] for row in conn.execute(text("PRAGMA table_info(roles)")).fetchall()]
+        else:
+            res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='roles'"))
+            existing_cols_roles = [row[0] for row in res.fetchall()]
+
+        if "organisation_id" not in existing_cols_roles:
+            conn.execute(text("ALTER TABLE roles ADD COLUMN organisation_id VARCHAR REFERENCES companies(id) ON DELETE CASCADE"))
+
+        # Ensure helpful composite/lookup indexes exist
+        index_stmts = [
+            "CREATE INDEX IF NOT EXISTS idx_companies_partner_id ON companies (partner_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_company_id ON users (company_id)",
+            "CREATE INDEX IF NOT EXISTS idx_employees_company_dept ON employees (company_id, department)",
+        ]
+        for stmt in index_stmts:
+            conn.execute(text(stmt))
 
         conn.commit()

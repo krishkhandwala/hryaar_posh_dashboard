@@ -35,22 +35,22 @@ def test_super_admin_authentication_and_dashboard():
     comps_res = client.get("/api/v1/super-admin/companies", headers=headers_sa)
     assert comps_res.status_code == 200
     comp_names = [c["name"] for c in comps_res.json()]
-    assert "Acme Corporation" in comp_names
-    assert "Beta Industries" in comp_names
+    assert "Nimbus Cloud Systems Pvt. Ltd." in comp_names
+    assert "Crestline Precision Engineering" in comp_names
 
 def test_tenant_login_and_dynamic_branding():
     # Acme Login returns Acme theme and branding
     res_acme = client.post("/api/v1/auth/login", json={"email": "hr@acme.com", "password": "Acme@1234"})
     assert res_acme.status_code == 200
     acme_data = res_acme.json()
-    assert acme_data["company_name"] == "Acme Corporation"
+    assert acme_data["company_name"] == "Nimbus Cloud Systems Pvt. Ltd."
     assert acme_data["primary_color"] in ["#142D50", "#1B365D"]
 
     # Beta Login returns Beta theme and branding
     res_beta = client.post("/api/v1/auth/login", json={"email": "hr@beta.com", "password": "Beta@1234"})
     assert res_beta.status_code == 200
     beta_data = res_beta.json()
-    assert beta_data["company_name"] == "Beta Industries"
+    assert beta_data["company_name"] == "Crestline Precision Engineering"
     assert beta_data["primary_color"] == "#065F46"
     assert beta_data["sidebar_color"] == "#064E3B"
     assert beta_data["primary_color"] != acme_data["primary_color"]
@@ -96,27 +96,41 @@ def test_rbac_company_admin_cannot_access_super_admin():
     assert res_analytics.status_code == 403
 
 def test_posh_complaints_isolation():
-    res_acme = client.post("/api/v1/auth/login", json={"email": "hr@acme.com", "password": "Acme@1234"})
-    headers_acme = {"Authorization": f"Bearer {res_acme.json()['access_token']}"}
+    # Company Admin / HR Manager must NOT automatically access confidential grievance contents
+    res_hr_acme = client.post("/api/v1/auth/login", json={"email": "hr@acme.com", "password": "Acme@1234"})
+    headers_hr_acme = {"Authorization": f"Bearer {res_hr_acme.json()['access_token']}"}
+    hr_denied = client.get("/api/v1/company/complaints", headers=headers_hr_acme)
+    assert hr_denied.status_code == 403
 
-    res_beta = client.post("/api/v1/auth/login", json={"email": "hr@beta.com", "password": "Beta@1234"})
-    headers_beta = {"Authorization": f"Bearer {res_beta.json()['access_token']}"}
+    # Authorised IC Members view ONLY their own company's complaints
+    res_ic_acme = client.post("/api/v1/auth/login", json={"email": "ic@acme.com", "password": "Ic@1234"})
+    assert res_ic_acme.status_code == 200
+    assert res_ic_acme.json()["workspace"] == "IC_WORKSPACE"
+    headers_ic_acme = {"Authorization": f"Bearer {res_ic_acme.json()['access_token']}"}
 
-    # Acme complaints
-    acme_complaints = client.get("/api/v1/company/complaints", headers=headers_acme).json()
+    res_ic_beta = client.post("/api/v1/auth/login", json={"email": "ic@beta.com", "password": "Ic@1234"})
+    assert res_ic_beta.status_code == 200
+    headers_ic_beta = {"Authorization": f"Bearer {res_ic_beta.json()['access_token']}"}
+
+    # Acme IC complaints
+    acme_res = client.get("/api/v1/company/complaints", headers=headers_ic_acme)
+    assert acme_res.status_code == 200
+    acme_complaints = acme_res.json()
     assert len(acme_complaints) > 0
     for comp in acme_complaints:
         assert "ACME" in comp["complaint_number"]
 
-    # Beta complaints
-    beta_complaints = client.get("/api/v1/company/complaints", headers=headers_beta).json()
+    # Beta IC complaints
+    beta_res = client.get("/api/v1/company/complaints", headers=headers_ic_beta)
+    assert beta_res.status_code == 200
+    beta_complaints = beta_res.json()
     assert len(beta_complaints) > 0
     for comp in beta_complaints:
         assert "BETA" in comp["complaint_number"]
 
-    # Beta cannot view Acme specific complaint details
+    # Beta IC cannot view Acme specific complaint details
     acme_comp_id = acme_complaints[0]["id"]
-    unauth_comp = client.get(f"/api/v1/company/complaints/{acme_comp_id}", headers=headers_beta)
+    unauth_comp = client.get(f"/api/v1/company/complaints/{acme_comp_id}", headers=headers_ic_beta)
     assert unauth_comp.status_code == 404
 
 def test_company_branding_customization_and_isolation():

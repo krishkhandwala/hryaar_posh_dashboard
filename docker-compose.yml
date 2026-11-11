@@ -52,7 +52,7 @@ services:
     restart: always
     environment:
       - CLUSTER_NODE_ID=node-worker-01
-      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - DATABASE_URL=postgresql+psycopg://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
       - REDIS_URL=redis://redis-cache:6379/0
       - STORAGE_PROVIDER=LOCAL
       - WORKER_CONCURRENCY=8
@@ -72,7 +72,7 @@ services:
     restart: always
     environment:
       - CLUSTER_NODE_ID=node-worker-02
-      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - DATABASE_URL=postgresql+psycopg://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
       - REDIS_URL=redis://redis-cache:6379/0
       - STORAGE_PROVIDER=LOCAL
       - WORKER_CONCURRENCY=8
@@ -94,7 +94,7 @@ services:
     command: ["python", "-m", "app.services.distributed_queue"]
     environment:
       - CLUSTER_NODE_ID=task-worker-async-01
-      - DATABASE_URL=postgresql://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
+      - DATABASE_URL=postgresql+psycopg://posh_admin:PoshSecret2026!@postgres-db:5432/posh_saas
       - REDIS_URL=redis://redis-cache:6379/0
     depends_on:
       - postgres-db

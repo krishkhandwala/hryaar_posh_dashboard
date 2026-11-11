@@ -24,11 +24,14 @@ interface SidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
   userRole?: string;
+  workspace?: string;
+  permissions?: string[];
   companyName?: string;
   logoUrl?: string | null;
   primaryColor?: string;
   sidebarColor?: string;
   partnerName?: string | null;
+  partnerLogoUrl?: string | null;
   coBrandingMode?: string | null;
   onLogout: () => void;
   isSuperAdminSupervision?: boolean;
@@ -39,70 +42,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   setCurrentTab,
   userRole = 'COMPANY_ADMIN',
-  companyName = 'Acme Corporation',
+  workspace,
+  permissions = [],
+  companyName = 'Enterprise Organisation',
   logoUrl,
   primaryColor,
   sidebarColor,
   partnerName,
+  partnerLogoUrl,
   coBrandingMode = 'CO_BRANDED',
   onLogout,
   isSuperAdminSupervision = false,
   onReturnToSuperAdmin,
 }) => {
-  const isCoBranded = partnerName && coBrandingMode === 'CO_BRANDED';
+  const isWhiteLabel = Boolean(partnerName && coBrandingMode === 'WHITE_LABEL');
+  const isCoBranded = Boolean(partnerName && coBrandingMode === 'CO_BRANDED');
+  const resolvedSidebarBg = sidebarColor || '#061122';
+  const resolvedPrimaryColor = primaryColor || '#2A62FF';
+  const displayBrandName = isWhiteLabel ? (partnerName || companyName) : companyName;
+  const displayBrandLogo = isWhiteLabel ? (partnerLogoUrl || logoUrl) : logoUrl;
+  const canViewGrievances = permissions.includes('ic.grievances.read') || userRole === 'IC_MEMBER';
+  const isICWorkspace = workspace === 'IC_WORKSPACE' || userRole === 'IC_MEMBER';
 
-  const navSections = [
-    {
-      group: 'Overview',
-      items: [
-        { id: 'dashboard', label: 'Dashboard Pulse', icon: LayoutDashboard, badge: 'Live' },
-        { id: 'organisation', label: 'Company Profile', icon: Building2 },
-      ],
-    },
-    {
-      group: 'Statutory Redressal',
-      items: [
-        { id: 'complaints', label: 'Complaints Register', icon: ShieldAlert, badge: 'Sec 11' },
-        { id: 'ic-members', label: 'Internal Committee', icon: Scale, badge: 'Sec 4' },
-      ],
-    },
-    {
-      group: 'People & Compliance',
-      items: [
-        { id: 'employees', label: 'Employee Registry', icon: Users2 },
-        { id: 'compliance', label: 'Statutory Filings', icon: FileCheck2 },
-        { id: 'integrations', label: 'LMS Webhooks', icon: Webhook, badge: 'API' },
-        { id: 'quiz', label: 'Mandatory Quiz', icon: Award, badge: 'Cert' },
-      ],
-    },
-    {
-      group: 'Policy & Governance',
-      items: [
-        { id: 'branding', label: 'Branding & Theme', icon: Palette },
-        { id: 'settings', label: 'Compliance Rules', icon: Sliders },
-        { id: 'audit', label: 'Audit Trail', icon: BarChart3 },
-      ],
-    },
-  ];
+  const navSections = isICWorkspace
+    ? [
+        {
+          group: 'Confidential IC Redressal',
+          items: [
+            { id: 'complaints', label: 'Complaints Register', icon: ShieldAlert, badge: 'Sec 11' },
+            { id: 'ic-members', label: 'Internal Committee', icon: Scale, badge: 'Sec 4' },
+            { id: 'compliance', label: 'Compliance Centre', icon: FileCheck2 },
+          ],
+        },
+      ]
+    : [
+        {
+          group: 'HR Compliance Analytics',
+          items: [
+            { id: 'dashboard', label: 'Dashboard Pulse', icon: LayoutDashboard, badge: 'Live' },
+            { id: 'employees', label: 'Employee Audit Roster', icon: Users2 },
+          ],
+        },
+      ];
 
   return (
-    <aside className="w-[270px] h-screen bg-[#061122] text-slate-100 flex flex-col justify-between border-r border-slate-800 select-none shrink-0 relative overflow-hidden">
+    <aside
+      className="w-[270px] h-screen text-slate-100 flex flex-col justify-between border-r border-slate-800/80 select-none shrink-0 relative overflow-hidden"
+      style={{ backgroundColor: resolvedSidebarBg }}
+    >
       <div className="relative z-10 flex flex-col h-full overflow-y-auto">
         {/* Brand Header */}
         <div className="px-6 py-5 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
             <CompanyLogo
-              name={companyName}
-              logoUrl={logoUrl}
-              primaryColor={primaryColor}
+              name={displayBrandName}
+              logoUrl={displayBrandLogo}
+              primaryColor={resolvedPrimaryColor}
               size="md"
             />
             <div className="truncate max-w-[165px]">
               <div className="font-bold text-slate-100 text-sm tracking-tight truncate">
-                {companyName}
+                {displayBrandName}
               </div>
               <span className="text-[11px] block font-medium text-slate-400 mt-0.5 truncate">
-                {isCoBranded ? `Managed by ${partnerName}` : 'PoSH Operating System'}
+                {isWhiteLabel
+                  ? `${companyName}`
+                  : isCoBranded
+                  ? `Managed by ${partnerName}`
+                  : 'Compliance & Training Portal'}
               </span>
             </div>
           </div>
@@ -141,17 +148,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       key={item.id}
                       onClick={() => setCurrentTab(item.id)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                      style={
                         isActive
-                          ? 'bg-blue-600/15 text-blue-400 font-semibold border border-blue-500/30'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                          ? {
+                              backgroundColor: `${resolvedPrimaryColor}24`,
+                              borderColor: `${resolvedPrimaryColor}55`,
+                              color: '#FFFFFF',
+                            }
+                          : undefined
+                      }
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer border ${
+                        isActive
+                          ? 'font-semibold'
+                          : 'border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <Icon
-                          className={`w-4 h-4 transition-colors ${
-                            isActive ? 'text-blue-400' : 'text-slate-400'
-                          }`}
+                          className="w-4 h-4 transition-colors"
+                          style={isActive ? { color: resolvedPrimaryColor } : undefined}
                         />
                         <span>{item.label}</span>
                       </div>
@@ -175,7 +190,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Statutory IC Channel & Sign-out */}
-        <div className="p-4 border-t border-slate-800/80 space-y-3 bg-[#061122]">
+        <div
+          className="p-4 border-t border-slate-800/80 space-y-3"
+          style={{ backgroundColor: resolvedSidebarBg }}
+        >
           <div className="p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
             <div className="flex items-center gap-2 mb-1 text-slate-200 text-xs font-semibold">
               <Shield className="w-3.5 h-3.5 text-emerald-400" />

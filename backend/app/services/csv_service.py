@@ -1,8 +1,8 @@
-﻿import io
+import io
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.models import Employee, TrainingRecord, AssessmentRecord, ImportJob, AuditLog
+from app.models.models import Company, Employee, TrainingRecord, AssessmentRecord, ImportJob, AuditLog
 
 class CSVImportService:
     @staticmethod
@@ -48,6 +48,12 @@ class CSVImportService:
             successful_rows = 0
             failed_rows = 0
             errors = []
+
+            comp = db.query(Company).filter(Company.id == company_id).first()
+            current_emp_count = db.query(Employee).filter(Employee.company_id == company_id).count()
+            assigned_quota = comp.assigned_seat_quota if (comp and comp.assigned_seat_quota and comp.assigned_seat_quota > 0) else None
+            plan_limit = comp.plan.max_employees if (comp and comp.plan and comp.plan.max_employees > 0) else None
+            effective_limit = min(x for x in [assigned_quota, plan_limit] if x is not None) if (assigned_quota or plan_limit) else None
 
             for idx, row in df.iterrows():
                 try:
@@ -101,6 +107,8 @@ class CSVImportService:
                     cert_id = f"CERT-{company_id[:4].upper()}-{code}" if cert_status == "ISSUED" else None
 
                     if not emp:
+                        if effective_limit is not None and current_emp_count >= effective_limit:
+                            raise ValueError(f"Seat quota reached ({current_emp_count}/{effective_limit})")
                         emp = Employee(
                             company_id=company_id,
                             employee_code=code,
@@ -119,6 +127,7 @@ class CSVImportService:
                             certificate_issued_at=datetime.utcnow() if cert_status == "ISSUED" else None
                         )
                         db.add(emp)
+                        current_emp_count += 1
                     else:
                         emp.department = dept
                         emp.training_progress_pct = progress

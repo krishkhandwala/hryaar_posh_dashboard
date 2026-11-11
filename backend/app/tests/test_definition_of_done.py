@@ -34,6 +34,12 @@ def test_full_definition_of_done_scenario():
     analytics = client.get("/api/v1/super-admin/analytics", headers=sa_headers).json()
     assert analytics["total_companies"] >= 2
 
+    # Idempotent pre-cleanup of test companies if a previous run was interrupted
+    existing_comps = client.get("/api/v1/super-admin/companies", headers=sa_headers).json()
+    for c in existing_comps:
+        if c["slug"] in ["apex-fintech", "beacon-logistics"]:
+            client.delete(f"/api/v1/super-admin/companies/{c['id']}", headers=sa_headers)
+
     # -------------------------------------------------------------
     # STEP 2 & 3: Create Company A (Apex FinTech) and Company B (Beacon Logistics)
     # -------------------------------------------------------------
@@ -189,13 +195,22 @@ def test_full_definition_of_done_scenario():
     cross_emp = client.get(f"/api/v1/employees?company_id={comp_b_id}", headers=headers_a)
     assert cross_emp.status_code == 403
 
-    # Company A CANNOT view or access Company B's complaints
-    cross_complaint = client.get(f"/api/v1/company/complaints/{complaint_b_id}", headers=headers_a)
-    assert cross_complaint.status_code == 404
+    # Company A / Company B Admins cannot read confidential IC grievance contents directly (403)
+    assert client.get(f"/api/v1/company/complaints/{complaint_b_id}", headers=headers_a).status_code == 403
+    assert client.get(f"/api/v1/company/complaints/{complaint_a_id}", headers=headers_b).status_code == 403
 
-    # Company B CANNOT access Company A's complaints
-    cross_complaint_rev = client.get(f"/api/v1/company/complaints/{complaint_a_id}", headers=headers_b)
-    assert cross_complaint_rev.status_code == 404
+    # Explicitly authorised IC_MEMBER for Company A sees Company A complaint, gets 404 on Company B's
+    client.post("/api/v1/super-admin/users", headers=sa_headers, json={
+        "email": "ic@apexfintech.com",
+        "full_name": "IC Chair Apex",
+        "password": "IcPassword@2026",
+        "role": "IC_MEMBER",
+        "company_id": comp_a_id
+    })
+    ic_a_login = client.post("/api/v1/auth/login", json={"email": "ic@apexfintech.com", "password": "IcPassword@2026"})
+    headers_ic_a = {"Authorization": f"Bearer {ic_a_login.json()['access_token']}"}
+    assert client.get(f"/api/v1/company/complaints/{complaint_a_id}", headers=headers_ic_a).status_code == 200
+    assert client.get(f"/api/v1/company/complaints/{complaint_b_id}", headers=headers_ic_a).status_code == 404
 
     # Company A CANNOT change Company B's branding
     cross_brand = client.put(

@@ -1,0 +1,328 @@
+================================================================================
+HRYAAR DIGI-POSH: THREE-TIER ARCHITECTURE EXPLAINED (CURRENT IMPLEMENTATION)
+================================================================================
+Created for architecture review & refinement.
+All details below reflect the exact current codebase behavior.
+
+--------------------------------------------------------------------------------
+1. HIGH-LEVEL OVERVIEW: WHO IS IN EACH TIER?
+--------------------------------------------------------------------------------
+
+The platform is built as a multi-tenant SaaS hierarchy using a single shared
+database logically partitioned by company_id and partner_id.
+
+In business terms, there are THREE primary commercial tiers, plus the end
+corporate employees (Learners) who take the training:
+
+  +--------------------------------------------------------------------------+
+  | TIER 0 (LEVEL 0): PLATFORM CREATOR / HRYAAR TECH MASTER                  |
+  | Role: SUPER_ADMIN (alias: PLATFORM_ADMIN)                                |
+  | Who:  The Tech Person at HRYAAR (you / platform owner)                   |
+  | What: Owns the platform, provisions Middleman Partners and Direct        |
+  |       Clients, manages plans, monitors cluster telemetry & audit logs.   |
+  +--------------------------------------------------------------------------+
+                     |                                  |
+       Sells wholesale seat pools             Can also onboard
+       to mutually exclusive Middlemen        Direct Clients directly
+                     |                        (partner_id = NULL)
+                     v                                  |
+  +--------------------------------------+              |
+  | TIER 1 (LEVEL 1): MIDDLEMEN /        |              |
+  | ASSIGNER PARTNERS                    |              |
+  | Role: PARTNER_ADMIN                  |              |
+  | company_type = "PARTNER"             |              |
+  |                                      |              |
+  | Examples:                            |              |
+  |  - Partner A: TalentPro HR Advisory  |              |
+  |  - Partner B: Apex Compliance        |              |
+  |                                      |              |
+  | Rule: MUTUALLY EXCLUSIVE.            |              |
+  | Partner A cannot see Partner B or    |              |
+  | Partner B's clients (and vice versa).|              |
+  +--------------------------------------+              |
+            |                  |                        |
+   Onboards & assigns     Onboards & assigns            |
+   Client Acme & Nexus    Client Beta                   |
+            v                  v                        v
+  +--------------------------------------------------------------------------+
+  | TIER 2 (LEVEL 2): CLIENT COMPANIES (END-USER ENTERPRISES / HR ANALYTICS) |
+  | Role: COMPANY_ADMIN (alias: HR_ADMIN), HR_MANAGER, IC_MEMBER             |
+  | company_type = "CLIENT"                                                  |
+  | partner_id = <Partner's Company ID> (or NULL if Direct Client)           |
+  |                                                                          |
+  | Examples:                                                                |
+  |  - Acme Cloud Systems     (partner_id = TalentPro)                       |
+  |  - Nexus BioSciences      (partner_id = TalentPro)                       |
+  |  - Beta Precision Mfg     (partner_id = Apex)                            |
+  |                                                                          |
+  | What: HR Professionals log in to view compliance analytics, webinars,    |
+  |       department completion, employee audit roster, CSV import, & IC.    |
+  +--------------------------------------------------------------------------+
+                                     |
+                      Enrolls / imports workforce
+                      (via CSV or LMS webhook)
+                                     v
+  +--------------------------------------------------------------------------+
+  | LEVEL 3 (WORKFORCE): CORPORATE EMPLOYEES / MANDATED LEARNERS             |
+  | Role: EMPLOYEE                                                           |
+  | What: Individual staff log in to complete 3 PoSH modules, pass the       |
+  |       scenario quiz (>= 70%), download a Section 21 certificate,         |
+  |       and access confidential IC grievance filing.                       |
+  +--------------------------------------------------------------------------+
+
+Note on Terminology in Code vs Business Intent:
+In the UI and docs, you will sometimes see "Level 0, 1, 2, 3" (4 views) because
+Employee Learners (EMPLOYEE) have their own dedicated Learner Portal separate
+from their company's HR Analytics Dashboard (COMPANY_ADMIN).
+
+
+--------------------------------------------------------------------------------
+2. DETAILED BREAKDOWN OF EACH TIER (WHAT THEY SEE & DO TODAY)
+--------------------------------------------------------------------------------
+
+A. TIER 0: HRYAAR TECH MASTER (PLATFORM CREATOR)
+------------------------------------------------
+- Seeded Logins:
+    tech@hryaar.com        / Admin@1234
+    superadmin@hryaar.com  / Admin@1234
+- Database User Record:
+    role = "SUPER_ADMIN"
+    company_id = NULL (not locked to any single client)
+- Frontend UI:
+    Rendered via frontend/src/components/superadmin/SuperAdminDashboard.tsx
+- Current Capabilities:
+    1. Platform Pulse: Total companies, active companies, total employees,
+       platform users, complaints, compliance stats, subscription breakdown.
+    2. Resellers & Middlemen Tab: View all companies where
+       company_type == "PARTNER", and trigger "Register Partner Organization".
+    3. Tenant Organizations Tab: View ALL organizations (both Partners and
+       Clients), search/filter by status, suspend/activate/delete companies,
+       edit company profiles, upload logos, and create new Partner or Client
+       organizations.
+    4. Platform Users Tab: View all users across all companies, create new
+       users, reset passwords.
+    5. Commercial Plans Tab: View/create/edit SubscriptionPlan tiers
+       (FREE_TRIAL, BASIC, PROFESSIONAL, ENTERPRISE).
+    6. System Health & Metrics Tab: Live cluster/worker simulation, cache
+       metrics, async job runner (/api/v1/cluster/...).
+    7. Audit Trail Tab: Platform-wide immutable audit log viewer.
+    8. Inspect Tenant ("Supervision Mode"): Can click into any tenant
+       company's Client Dashboard using inspectedCompanyId and return to hub.
+- Backend API Scope:
+    /api/v1/super-admin/* (guarded by require_super_admin)
+
+
+B. TIER 1: MIDDLEMEN / ASSIGNER PARTNERS
+----------------------------------------
+- Seeded Logins:
+    Partner A (TalentPro): partner@talentpro.com / Partner@1234
+    Partner B (Apex):      partner@apex.com      / Partner@1234
+- Database Records:
+    Company record: company_type = "PARTNER", assigned_seat_quota = 5000 / 3000
+    User record:    role = "PARTNER_ADMIN", company_id = <partner.id>
+- Frontend UI:
+    Rendered via frontend/src/components/partner/PartnerDashboard.tsx
+- Current Capabilities:
+    1. Wholesale Portfolio Overview (/api/v1/partner/overview):
+       Shows partner capacity, total seats allocated to clients, remaining
+       seats, total clients count, total learners managed, average completion %.
+    2. Assigned Clients Grid (/api/v1/partner/clients):
+       Lists ONLY companies where Company.partner_id == partner.id.
+       Partner A sees Acme & Nexus; Partner B sees only Beta.
+    3. Onboard New Client (POST /api/v1/partner/clients):
+       Partner creates a new CLIENT company locked to partner_id = partner.id,
+       creates default CompanySettings, and creates an initial COMPANY_ADMIN
+       user ("HR Professional") for that client.
+    4. Co-Branding Modes (PATCH /api/v1/partner/branding):
+       Partner can choose how branding appears across their client portals:
+         - CO_BRANDED:  Client logo + "Managed by [Partner Name]" pill
+         - WHITE_LABEL: Partner branding replaces platform branding
+         - CLIENT_ONLY: Only the client company's logo and name appear
+    5. Inspect Client:
+       Partner can click into any of their own assigned clients' HR dashboard
+       (using onInspectClient -> inspectedCompanyId).
+- Mutual Exclusivity Enforcement:
+    In backend/app/core/deps.py -> get_tenant_company_id():
+    If a PARTNER_ADMIN requests a requested_company_id, the server checks:
+      if comp.id != current_user.company_id and comp.partner_id != current_user.company_id:
+          raise HTTPException(403, "Forbidden: Cross-partner data access prohibited")
+- Backend API Scope:
+    /api/v1/partner/* (guarded by require_partner_admin)
+
+
+C. TIER 2: CLIENT COMPANIES (HR PROFESSIONALS / ANALYTICS)
+----------------------------------------------------------
+- Seeded Logins:
+    Acme Corp (Partner A):  hr@acme.com     / Acme@1234
+    Nexus Bio (Partner A):  hr@nexusbio.com / Nexus@1234
+    Beta Ind  (Partner B):  hr@beta.com     / Beta@1234
+- Database Records:
+    Company record: company_type = "CLIENT", partner_id = <partner.id or NULL>
+    User record:    role = "COMPANY_ADMIN" (or HR_MANAGER / IC_MEMBER),
+                    company_id = <client.id>
+- Frontend UI:
+    Rendered via frontend/src/app/page.tsx (with Sidebar.tsx & Header.tsx)
+- Current Capabilities:
+    1. Main "Dashboard Pulse" Tab (The 7 Core HR Analytics Items):
+       - Total Number of Employees / Learners (KPICards.tsx)
+       - Training Completion Rate % (KPICards.tsx)
+       - Assessment Success Rate % (KPICards.tsx)
+       - Live Webinars + "Mail All (from CSV)" trigger (LiveWebinarsView.tsx)
+       - Auto Webinar Reminders: 7-day & 2-day triggers (LiveWebinarsView.tsx)
+       - Department-wise Completion Rate (DepartmentCompletionView.tsx)
+       - Individual Employee Audit Roster + CSV Export (EmployeeTable.tsx)
+    2. CSV Import Modal (ImportModal.tsx):
+       Bulk-imports employee rows from CSV into that client's company_id.
+    3. Additional Sidebar Tabs Currently Enabled for Client Admins:
+       - Company Profile (TenantProfileView.tsx)
+       - Complaints Register (ComplaintsView.tsx)
+       - Internal Committee (InternalCommitteeView.tsx)
+       - Employee Registry (EmployeeTable.tsx)
+       - Statutory Filings / Compliance Docs & PDF Report (ComplianceDocsView.tsx)
+       - LMS Webhooks (IntegrationsView.tsx)
+       - Mandatory Quiz Preview (QuizAssessmentModal.tsx)
+       - Branding & Theme Customizer (BrandingCustomizerView.tsx)
+       - Compliance Rules Settings (CompanySettingsView.tsx)
+       - Audit Trail (AuditTrailView.tsx)
+- Cross-Tenant Isolation:
+    In backend/app/core/deps.py -> get_tenant_company_id():
+    If a COMPANY_ADMIN passes any requested_company_id != current_user.company_id,
+    the backend rejects the request with HTTP 403 Forbidden.
+
+
+D. LEVEL 3: EMPLOYEES / LEARNERS (SUB-TIER UNDER CLIENT COMPANIES)
+------------------------------------------------------------------
+- Seeded Logins:
+    Rohan Reddy (In Progress): rohan.reddy194@acmecorp.com / Employee@1234
+    Ananya Mehta (Certified):  ananya.mehta1@acmecorp.com  / Employee@1234
+    (Also supports logging in with Employee Code like ACM-1194 / ACM-1001)
+- Database Records:
+    Employee record: company_id = <client.id>, training_status, assessment_score
+    User record:     role = "EMPLOYEE", company_id = <client.id>
+                     (auto-created on first login if email/code matches Employee)
+- Frontend UI:
+    Rendered via frontend/src/components/learner/EmployeeLearnerPortal.tsx
+- Current Capabilities:
+    1. View & complete 3 PoSH statutory modules (/api/v1/learner/modules).
+    2. Take 5-question scenario assessment (/api/v1/learner/assessment/submit).
+       Passing (>= 70%) updates the Employee record to COMPLETED + PASSED and
+       generates a certificate_id, which immediately updates Tier 2 HR analytics.
+    3. Print/view Official Completion Certificate with company logo seal.
+    4. Submit confidential PoSH grievance directly to the company's IC.
+
+
+--------------------------------------------------------------------------------
+3. HOW THE DATABASE STORES THE HIERARCHY
+--------------------------------------------------------------------------------
+
+All organizations (both Middlemen and Clients) are stored in the SAME table:
+`companies`.
+
+They are linked via a self-referential foreign key:
+  Company.company_type  -> "PARTNER" or "CLIENT"
+  Company.partner_id    -> Points to another Company.id (the Middleman's id)
+                           or NULL if onboarded directly by Tier 0 Super Admin.
+  Company.partner_name  -> Cached string name of the partner
+  Company.assigned_seat_quota -> Seat capacity (pool for Partner, limit for Client)
+
+And all users across all tiers are stored in the `users` table:
+  User.role       -> "SUPER_ADMIN" | "PARTNER_ADMIN" | "COMPANY_ADMIN" |
+                     "HR_MANAGER"  | "IC_MEMBER"     | "EMPLOYEE"
+  User.company_id -> NULL for SUPER_ADMIN, or Company.id for everyone else.
+
+
+--------------------------------------------------------------------------------
+4. HOW LOGOS & BRANDING WORK ACROSS TIERS
+--------------------------------------------------------------------------------
+
+- Every company has its own `logo_url` and 4 theme colors (`primary_color`,
+  `secondary_color`, `accent_color`, `sidebar_color`).
+- `frontend/src/components/brand/CompanyLogo.tsx` renders either the uploaded
+  image (if valid) or a bespoke vector emblem per company slug (`hryaar`,
+  `talentpro`, `apex`, `acme`, `beta`, `nexusbio`), or initials + primary_color
+  for newly created companies.
+- Because `get_tenant_company_id()` scopes every query to one company, Company A
+  never receives Company B's logo_url, colors, or records.
+- For Partner-managed clients, `co_branding_mode` controls whether the Partner's
+  name/logo badge ("Managed by TalentPro") is shown alongside the Client's logo.
+
+
+--------------------------------------------------------------------------------
+5. CURRENT QUIRKS / GAPS IN THE CODE TO KEEP IN MIND WHEN REFINING
+--------------------------------------------------------------------------------
+
+As you refine how the three tiers should work, note these exact behaviors in the
+current codebase:
+
+1. Creating a Partner via Tier 0 UI assigns the wrong user role:
+   - In `backend/app/api/v1/super_admin.py` (create_company, line ~161), when
+     Super Admin creates a company with `company_type="PARTNER"`, the initial
+     user is hardcoded with `role="COMPANY_ADMIN"` instead of `"PARTNER_ADMIN"`.
+     (Only seeded partners in `seed.py` currently have `role="PARTNER_ADMIN"`.)
+
+2. Partner Seat Re-Allocation button is not wired on the backend:
+   - In `frontend/src/components/partner/PartnerDashboard.tsx` (line 126), the
+     "Allocate Seats" modal calls:
+       `POST /api/v1/partner/clients/{id}/allocate-seats`
+     However, `backend/app/api/v1/partner.py` does NOT currently have that
+     route, so clicking Save Quota in that modal will return 404.
+   - Also, `POST /api/v1/partner/clients` does not currently block a Partner
+     from assigning more total seats than `partner.assigned_seat_quota`.
+
+3. Middleman role scope ("simply assigners"):
+   - Right now, Partners can:
+     (a) Onboard clients and set initial seat quota,
+     (b) View aggregated client completion %,
+     (c) Click "Inspect Client" to open the full Client HR Dashboard,
+     (d) Edit co-branding modes.
+   - If you want Middlemen to be PURELY assigners (only provisioning clients and
+     assigning seats/licenses, without inspecting employee rosters/complaints),
+     the "Inspect Client" view and client analytics metrics can be restricted.
+
+4. Client User role scope ("simply HR professionals for analytics"):
+   - Right now, Client HR Admins see the 7 core analytics items on the main
+     Dashboard Pulse tab, PLUS 10 additional operational tabs in the left sidebar
+     (Complaints, IC Members, Compliance Docs, Webhooks, Branding, Settings, etc.).
+   - If you want Client accounts streamlined purely for analytics + CSV/reminders,
+     or kept split between HR Analytics vs IC Redressal Officer, that can be
+     cleanly separated by role (`HR_MANAGER` vs `IC_MEMBER` vs `COMPANY_ADMIN`).
+
+5. Employee Seat Quota Enforcement:
+   - `Company.assigned_seat_quota` exists on both Partners and Clients. We should
+     confirm whether adding/importing employees in a Client company must strictly
+     block once `total_employees >= assigned_seat_quota`, and whether Partner's
+     pool strictly deducts from `partner.assigned_seat_quota`.
+
+6. Super Admin User Management Modal:
+   - In `SuperAdminDashboard.tsx`, creating a user should clearly allow choosing
+     `PARTNER_ADMIN` when linking a user to a `PARTNER` company.
+
+
+--------------------------------------------------------------------------------
+6. KEY CODE FILES FOR REFINING THE THREE TIERS
+--------------------------------------------------------------------------------
+
+Backend:
+  - backend/app/models/models.py          (Company, User, Employee, Subscription)
+  - backend/app/core/deps.py              (Role guards & get_tenant_company_id)
+  - backend/app/api/v1/super_admin.py     (Tier 0 API endpoints)
+  - backend/app/api/v1/partner.py         (Tier 1 Middleman API endpoints)
+  - backend/app/api/v1/endpoints.py       (Tier 2 Client HR Dashboard endpoints)
+  - backend/app/api/v1/company.py         (Tier 2 Profile, Branding, Complaints, IC)
+  - backend/app/api/v1/learner.py         (Level 3 Employee Learner endpoints)
+  - backend/app/api/v1/auth.py            (Login, token payload, role resolution)
+  - backend/app/db/seed.py                (Default test companies, partners, users)
+
+Frontend:
+  - frontend/src/app/page.tsx                              (Role-based router & Client UI)
+  - frontend/src/components/superadmin/SuperAdminDashboard.tsx (Tier 0 Console)
+  - frontend/src/components/partner/PartnerDashboard.tsx       (Tier 1 Middleman UI)
+  - frontend/src/components/learner/EmployeeLearnerPortal.tsx  (Level 3 Learner UI)
+  - frontend/src/components/layout/Sidebar.tsx                 (Client navigation)
+  - frontend/src/components/layout/Header.tsx                  (Client top bar & badges)
+  - frontend/src/components/brand/CompanyLogo.tsx              (Logo isolation)
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+
