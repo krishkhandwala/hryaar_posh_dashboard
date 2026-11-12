@@ -1,11 +1,11 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
 
 # Engine configuration with high-concurrency connection pooling
 connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+    connect_args = {"check_same_thread": False, "timeout": 15}
     engine = create_engine(
         settings.DATABASE_URL,
         connect_args=connect_args,
@@ -13,6 +13,15 @@ if settings.DATABASE_URL.startswith("sqlite"):
         future=True,
         pool_pre_ping=True
     )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 else:
     # Production PostgreSQL Connection Pool (Tier 3 Persistence)
     engine = create_engine(

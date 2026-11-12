@@ -1,5 +1,6 @@
 from sqlalchemy import text
 from app.db.session import engine, Base
+import app.models.models  # noqa: F401 - register all SQLAlchemy models on Base.metadata before create_all
 
 def run_migrations():
     """
@@ -114,11 +115,28 @@ def run_migrations():
         if "organisation_id" not in existing_cols_roles:
             conn.execute(text("ALTER TABLE roles ADD COLUMN organisation_id VARCHAR REFERENCES companies(id) ON DELETE CASCADE"))
 
+        # Check user_sessions table columns (IP + User-Agent tracking for active sessions UI)
+        if is_sqlite:
+            existing_cols_sess = [row[1] for row in conn.execute(text("PRAGMA table_info(user_sessions)")).fetchall()]
+        else:
+            res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user_sessions'"))
+            existing_cols_sess = [row[0] for row in res.fetchall()]
+
+        for col_name, col_type in [("ip_address", "VARCHAR(64)"), ("user_agent", "VARCHAR(255)")]:
+            if col_name not in existing_cols_sess:
+                conn.execute(text(f"ALTER TABLE user_sessions ADD COLUMN {col_name} {col_type} DEFAULT NULL"))
+
         # Ensure helpful composite/lookup indexes exist
         index_stmts = [
             "CREATE INDEX IF NOT EXISTS idx_companies_partner_id ON companies (partner_id)",
             "CREATE INDEX IF NOT EXISTS idx_users_company_id ON users (company_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_company_role ON users (company_id, role)",
             "CREATE INDEX IF NOT EXISTS idx_employees_company_dept ON employees (company_id, department)",
+            "CREATE INDEX IF NOT EXISTS idx_employees_company_status ON employees (company_id, training_status)",
+            "CREATE INDEX IF NOT EXISTS idx_audit_company_created ON audit_logs (company_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_payments_company_created ON payment_transactions (company_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_revoked ON user_sessions (user_id, is_revoked)",
+            "CREATE INDEX IF NOT EXISTS idx_cluster_jobs_company_created ON cluster_jobs (company_id, created_at)",
         ]
         for stmt in index_stmts:
             conn.execute(text(stmt))

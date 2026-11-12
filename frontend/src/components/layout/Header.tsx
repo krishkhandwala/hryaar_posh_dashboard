@@ -1,16 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bell,
   Calendar,
   UploadCloud,
   ArrowLeft,
   ShieldAlert,
-  Shield,
-  Building
+  ShieldCheck,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
+import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
 
 interface HeaderProps {
   userName: string;
@@ -21,7 +23,7 @@ interface HeaderProps {
   partnerName?: string | null;
   partnerLogoUrl?: string | null;
   coBrandingMode?: string | null;
-  onImportClick: () => void;
+  onImportClick?: () => void;
   isSuperAdminSupervision?: boolean;
   onReturnToSuperAdmin?: () => void;
   onNavigateToComplaints?: () => void;
@@ -41,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
   onReturnToSuperAdmin,
   onNavigateToComplaints,
 }) => {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
   const isWhiteLabel = Boolean(partnerName && coBrandingMode === 'WHITE_LABEL');
   const isCoBranded = Boolean(partnerName && coBrandingMode === 'CO_BRANDED');
   const displayName = isWhiteLabel ? (partnerName || companyName) : companyName;
@@ -119,23 +123,72 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Import CSV Action */}
+        {/* Import CSV Action (Platform Admin Only) */}
+        {onImportClick && (
+          <button
+            onClick={onImportClick}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Import CSV</span>
+          </button>
+        )}
+
+        {/* Security & Active Sessions */}
         <button
-          onClick={onImportClick}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+          type="button"
+          onClick={() => setShowSecurityModal(true)}
+          className="p-2.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-xl border border-slate-200/80 transition-colors cursor-pointer"
+          title="Account Security & Active Sessions"
+          aria-label="Account Security"
         >
-          <UploadCloud className="w-4 h-4" />
-          <span>Import CSV</span>
+          <ShieldCheck className="w-4 h-4" />
         </button>
 
         {/* Notifications */}
-        <button
-          className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200/80 transition-colors cursor-pointer relative"
-          aria-label="Notifications"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600" />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowNotifications((prev) => !prev)}
+            className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200/80 transition-colors cursor-pointer relative"
+            aria-label="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600" />
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-50 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="font-bold text-slate-900">Compliance Notifications</span>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-slate-900">CY 2025–2026 PoSH Mandate Active</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">
+                      Webinar reminders (7-day &amp; 2-day) are armed for enrolled employees.
+                    </div>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <div className="font-semibold text-slate-800">Multi-Tenant Isolation Active</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    All audit events and roster records are scoped to {companyName}.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Account Tile */}
         <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
@@ -152,6 +205,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      <SecuritySessionsModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+      />
     </header>
   );
 };

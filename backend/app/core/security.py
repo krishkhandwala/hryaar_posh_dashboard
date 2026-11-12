@@ -63,3 +63,29 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def needs_password_rehash(hashed_password: str) -> bool:
     return not (hashed_password and hashed_password.startswith("$2"))
+
+
+def validate_password_strength(password: str) -> Optional[str]:
+    """
+    Validates password complexity. Returns None if valid, or a descriptive error string.
+    Requires >= 8 characters with uppercase, lowercase, numeric, and special characters.
+    """
+    if not password or len(password) < 8:
+        return "Password must be at least 8 characters long."
+    if not any(c.isupper() for c in password):
+        return "Password must include at least one uppercase letter."
+    if not any(c.islower() for c in password):
+        return "Password must include at least one lowercase letter."
+    if not any(c.isdigit() for c in password):
+        return "Password must include at least one digit."
+    if not any(not c.isalnum() for c in password):
+        return "Password must include at least one special character (e.g. @, #, !, $)."
+    return None
+
+
+def sanitize_csv_cell(value: Any) -> str:
+    """Prevents CSV formula injection (=, +, -, @, tab, CR) when exported to Excel/Sheets."""
+    text = "" if value is None else str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text

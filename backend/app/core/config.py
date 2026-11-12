@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Tier 2 & Tier 3 Distributed Systems Configuration
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
     ENABLE_DISTRIBUTED_CACHE: bool = True
-    CLUSTER_NODE_ID: str = os.getenv("CLUSTER_NODE_ID", "api-worker-alpha-1")
+    CLUSTER_NODE_ID: str = os.getenv("CLUSTER_NODE_ID", "api-worker-alpha-1").strip()
     WORKER_CONCURRENCY: int = 8
     
     # Distributed Object Storage (Local FS / MinIO / S3)
@@ -37,7 +37,15 @@ class Settings(BaseSettings):
     
     # Uploads directory
     UPLOAD_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "uploads")
-    
+
+    # Payment Gateways (Razorpay India + Stripe Global; Sandbox HMAC mode if keys unset)
+    RAZORPAY_KEY_ID: Optional[str] = None
+    RAZORPAY_KEY_SECRET: Optional[str] = None
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    PAYMENT_CURRENCY: str = "INR"
+
     # Allowed CORS Origins
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:3000",

@@ -19,7 +19,6 @@ import { QuizAssessmentModal } from '@/components/dashboard/QuizAssessmentModal'
 import { SuperAdminDashboard } from '@/components/superadmin/SuperAdminDashboard';
 import { PartnerDashboard } from '@/components/partner/PartnerDashboard';
 import { EmployeeLearnerPortal } from '@/components/learner/EmployeeLearnerPortal';
-import { ImportModal } from '@/components/modals/ImportModal';
 import { apiClient } from '@/lib/api';
 import { applyTheme } from '@/lib/brand';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
@@ -84,7 +83,6 @@ export default function Home() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -614,7 +612,6 @@ export default function Home() {
           partnerName={activeCompany?.partner_name || user?.partner_name}
           partnerLogoUrl={activeCompany?.partner_logo_url || user?.partner_logo_url}
           coBrandingMode={activeCompany?.co_branding_mode || user?.co_branding_mode}
-          onImportClick={() => setIsImportModalOpen(true)}
           isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
           onReturnToSuperAdmin={() => setInspectedCompanyId(null)}
           onNavigateToComplaints={canViewGrievances ? () => setCurrentTab('complaints') : undefined}
@@ -796,14 +793,6 @@ export default function Home() {
           </div>
         </footer>
       </div>
-
-      {/* CSV Import Modal */}
-      <ImportModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        companyId={selectedCompanyId}
-        onSuccess={() => loadDashboardData(selectedCompanyId)}
-      />
 
       {/* Mandatory Statutory Quiz & Certificate Modal */}
       <QuizAssessmentModal

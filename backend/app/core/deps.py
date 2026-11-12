@@ -35,10 +35,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
 
-    # Session revocation check
+    # Session revocation check across cluster cache + persistent store
     if jti:
+        if distributed_cache.get(f"revoked_jti:{jti}") is True:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has been revoked. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         session = db.query(UserSession).filter(UserSession.jti == jti).first()
         if session and session.is_revoked:
+            distributed_cache.set(f"revoked_jti:{jti}", True, ttl_seconds=3600)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session has been revoked. Please log in again.",

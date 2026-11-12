@@ -87,6 +87,15 @@ export const IntegrationsView: React.FC<{ companyName: string; onSyncComplete?: 
     }
   };
 
+  const handleRevokeKey = async (keyId: string, keyName: string) => {
+    try {
+      await apiClient.delete(`/company/integrations/api-keys/${keyId}`);
+      fetchIntegrations();
+    } catch (err) {
+      alert(`Failed to revoke API key "${keyName}"`);
+    }
+  };
+
   const handleSimulateSync = async () => {
     try {
       setSyncing(true);
@@ -214,7 +223,7 @@ export const IntegrationsView: React.FC<{ companyName: string; onSyncComplete?: 
             <h4 className="font-black text-sm">Save Your API Key Now (Never Shown Again)</h4>
           </div>
           <p className="text-xs text-amber-800 mb-3">
-            This cryptographic key authenticates your external LMS webhook payload. Antigravity stores only a bcrypt hash.
+            This cryptographic key authenticates your external LMS webhook payload. HRYAAR stores only a salted bcrypt hash.
           </p>
           <div className="flex items-center gap-2">
             <input
@@ -303,10 +312,25 @@ export const IntegrationsView: React.FC<{ companyName: string; onSyncComplete?: 
                     <td className="py-3 px-3 text-slate-500">
                       {k.last_used_at ? new Date(k.last_used_at).toLocaleTimeString() : 'Never'}
                     </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        ACTIVE
-                      </span>
+                    <td className="py-3 px-3 text-right space-x-2">
+                      {k.is_active ? (
+                        <>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ACTIVE
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeKey(k.id, k.name)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer"
+                          >
+                            Revoke
+                          </button>
+                        </>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200">
+                          REVOKED
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

@@ -485,13 +485,19 @@ def init_db():
             )
             db.add(r_obj)
             db.flush()
+        expected_pids = {perm_map[pk].id for pk in pkeys}
         existing_links = {
             rp.permission_id for rp in db.query(RolePermission).filter(RolePermission.role_id == r_obj.id).all()
         }
-        for pk in pkeys:
-            pid = perm_map[pk].id
-            if pid not in existing_links:
-                db.add(RolePermission(role_id=r_obj.id, permission_id=pid))
+        # Remove permissions no longer granted in ROLE_PERMISSIONS
+        stale_pids = existing_links - expected_pids
+        if stale_pids:
+            db.query(RolePermission).filter(
+                RolePermission.role_id == r_obj.id,
+                RolePermission.permission_id.in_(stale_pids)
+            ).delete(synchronize_session=False)
+        for pid in expected_pids - existing_links:
+            db.add(RolePermission(role_id=r_obj.id, permission_id=pid))
 
     db.commit()
 

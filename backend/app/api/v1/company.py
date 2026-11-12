@@ -739,11 +739,39 @@ def generate_api_key(
 
     return {
         "status": "success",
+        "id": new_key.id,
         "name": name,
         "api_key": raw_token,
         "masked_key": masked,
         "warning": "Copy this key now. For enterprise security, it will never be displayed in plaintext again."
     }
+
+
+@router.delete("/integrations/api-keys/{key_id}")
+def revoke_api_key(
+    key_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_company_admin),
+):
+    """Revokes an existing company API key so external webhooks can no longer authenticate with it."""
+    tenant_id = get_tenant_company_id(None, current_user, db)
+    key_obj = db.query(CompanyAPIKey).filter(
+        CompanyAPIKey.id == key_id,
+        CompanyAPIKey.company_id == tenant_id,
+    ).first()
+    if not key_obj:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    key_obj.is_active = False
+    db.add(AuditLog(
+        company_id=tenant_id,
+        actor_user_id=current_user.id,
+        user_email=current_user.email,
+        action="INTEGRATION_KEY_REVOKED",
+        details=f"Revoked API Key '{key_obj.name}' ({key_obj.masked_key})",
+    ))
+    db.commit()
+    return {"status": "success", "message": f"API key '{key_obj.name}' revoked."}
 
 @router.post("/integrations/simulate-lms-sync")
 def simulate_lms_sync(

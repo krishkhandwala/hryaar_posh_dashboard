@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
+import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
 
 interface PartnerDashboardProps {
   user: any;
@@ -42,8 +43,18 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
   const [portfolio, setPortfolio] = useState<any>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'clients' | 'branding' | 'hierarchy'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'branding' | 'hierarchy' | 'billing'>('clients');
+
+  // Payment & Billing State
+  const [billingPlans, setBillingPlans] = useState<any[]>([]);
+  const [billingSummary, setBillingSummary] = useState<any>(null);
+  const [billingGateways, setBillingGateways] = useState<any>(null);
+  const [seatPackQty, setSeatPackQty] = useState<number>(500);
+  const [paymentProvider, setPaymentProvider] = useState<'RAZORPAY' | 'STRIPE' | 'SANDBOX'>('SANDBOX');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
 
   // Onboard Client Modal
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
@@ -95,12 +106,17 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
   const fetchPartnerData = async () => {
     setLoading(true);
     try {
-      const [overviewRes, clientsRes] = await Promise.all([
+      const [overviewRes, clientsRes, plansRes, billSumRes] = await Promise.all([
         apiClient.get('/partner/overview'),
         apiClient.get('/partner/clients'),
+        apiClient.get('/billing/plans').catch(() => ({ data: { plans: [], gateways: null } })),
+        apiClient.get('/billing/summary').catch(() => ({ data: null })),
       ]);
       setPortfolio(overviewRes.data);
       setClients(clientsRes.data);
+      setBillingPlans(plansRes.data.plans || []);
+      setBillingGateways(plansRes.data.gateways || null);
+      setBillingSummary(billSumRes.data);
 
       setPartnerLogoUrl(overviewRes.data.partner_logo_url || '');
       setPartnerPrimaryColor(overviewRes.data.primary_color || '#2A62FF');
@@ -111,6 +127,59 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
       console.error('Failed to load partner portfolio:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePartnerCheckout = async (planId?: string, seatsToAdd: number = 0) => {
+    setCheckoutLoading(true);
+    setPaymentMessage(null);
+    try {
+      const res = await apiClient.post('/billing/checkout', {
+        provider: paymentProvider,
+        currency: paymentProvider === 'STRIPE' ? 'USD' : 'INR',
+        billing_cycle: seatsToAdd > 0 && !planId ? 'TOPUP' : 'MONTHLY',
+        plan_id: planId || null,
+        seats_to_add: seatsToAdd,
+      });
+
+      if (res.data.gateway_mode === 'LIVE' && res.data.checkout_url) {
+        window.open(res.data.checkout_url, '_blank', 'noopener,noreferrer');
+        setPaymentMessage(`Checkout session ${res.data.order_id} opened in Stripe.`);
+        return;
+      }
+
+      // Verify signed order (Sandbox instant verification or Razorpay signature callback)
+      const verifyRes = await apiClient.post('/billing/verify', {
+        order_id: res.data.order_id,
+        payment_id: res.data.sandbox_payment_id,
+        signature: res.data.sandbox_signature,
+      });
+      setPaymentMessage(
+        `Payment verified! Invoice ${verifyRes.data.invoice_number} issued${
+          verifyRes.data.seats_purchased ? ` (+${verifyRes.data.seats_purchased} seats added to your pool)` : ''
+        }.`
+      );
+      await fetchPartnerData();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Payment checkout failed');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (txId: string, invoiceNo: string) => {
+    try {
+      const res = await apiClient.get(`/billing/invoices/${txId}/pdf`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoiceNo || txId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to download invoice PDF');
     }
   };
 
@@ -311,6 +380,15 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            onClick={() => setShowSecurityModal(true)}
+            className="p-2 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-xl border border-slate-200/80 transition-colors cursor-pointer"
+            title="Account Security & Active Sessions"
+          >
+            <ShieldCheck className="w-4 h-4" />
+          </button>
+
+          <button
             onClick={fetchPartnerData}
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200/80 transition-colors cursor-pointer"
             title="Refresh Portfolio"
@@ -381,6 +459,18 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
             >
               <Palette className="w-3.5 h-3.5" />
               <span>Branding</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('billing')}
+              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+                activeTab === 'billing'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Billing &amp; Top-Up</span>
             </button>
           </div>
 
@@ -915,6 +1005,162 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
             </div>
           </div>
         )}
+
+        {/* TAB 4: BILLING, SEAT TOP-UPS & INVOICES */}
+        {activeTab === 'billing' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Wholesale Seat Pool Purchase &amp; Plan Billing
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Purchase additional seat packs or upgrade your commercial tier via Razorpay (INR), Stripe (USD), or Sandbox verification.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-500">Gateway:</span>
+                  <select
+                    value={paymentProvider}
+                    onChange={(e) => setPaymentProvider(e.target.value as any)}
+                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none"
+                  >
+                    <option value="SANDBOX">Instant Sandbox Checkout (INR)</option>
+                    <option value="RAZORPAY">
+                      Razorpay (INR){billingGateways?.razorpay_enabled ? ' • Live' : ' • Sandbox Fallback'}
+                    </option>
+                    <option value="STRIPE">
+                      Stripe (USD){billingGateways?.stripe_enabled ? ' • Live' : ' • Sandbox Fallback'}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              {paymentMessage && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{paymentMessage}</span>
+                </div>
+              )}
+
+              {/* Wholesale Seat Pack Purchase */}
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Top Up Wholesale Seat Pool</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Current Capacity: <strong className="text-slate-900">{(portfolio?.partner_capacity || 0).toLocaleString()} seats</strong> &bull; Available: <strong className="text-emerald-700">{(portfolio?.remaining_seats || 0).toLocaleString()} seats</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <select
+                    value={seatPackQty}
+                    onChange={(e) => setSeatPackQty(Number(e.target.value))}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-900"
+                  >
+                    <option value={250}>+250 Seats (₹{(250 * 168).toLocaleString()} / $500)</option>
+                    <option value={500}>+500 Seats (₹{(500 * 168).toLocaleString()} / $1,000)</option>
+                    <option value={1000}>+1,000 Seats (₹{(1000 * 168).toLocaleString()} / $2,000)</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    disabled={checkoutLoading}
+                    onClick={() => handlePartnerCheckout(undefined, seatPackQty)}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    {checkoutLoading ? 'Processing...' : 'Pay & Add Seats'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Subscription Plan Cards */}
+              {billingPlans.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {billingPlans.map((pl) => (
+                    <div key={pl.id} className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">{pl.name}</div>
+                        <div className="font-bold text-sm text-slate-900 mt-0.5">{pl.display_name}</div>
+                        <div className="text-lg font-bold text-slate-900 mt-2 tabular-nums">
+                          {paymentProvider === 'STRIPE'
+                            ? `$${pl.price_monthly_usd}`
+                            : `₹${pl.price_monthly_inr.toLocaleString()}`}
+                          <span className="text-xs font-normal text-slate-500"> / mo</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={checkoutLoading || pl.price_monthly_usd <= 0}
+                        onClick={() => handlePartnerCheckout(pl.id, 0)}
+                        className="w-full py-1.5 px-3 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-800 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        {pl.price_monthly_usd <= 0 ? 'Included Tier' : 'Select & Pay'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Invoices & Payment History */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-4 shadow-xs">
+              <h3 className="text-sm font-bold text-slate-900">Invoices &amp; Payment History</h3>
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-4">Invoice</th>
+                      <th className="py-2.5 px-4">Description</th>
+                      <th className="py-2.5 px-4">Gateway</th>
+                      <th className="py-2.5 px-4">Amount</th>
+                      <th className="py-2.5 px-4">Status</th>
+                      <th className="py-2.5 px-4 text-right">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {billingSummary?.transactions?.length > 0 ? (
+                      billingSummary.transactions.map((tx: any) => (
+                        <tr key={tx.id} className="hover:bg-slate-50/70">
+                          <td className="py-3 px-4 font-mono font-semibold text-slate-800">
+                            {tx.invoice_number || tx.order_id}
+                          </td>
+                          <td className="py-3 px-4 text-slate-700">{tx.description}</td>
+                          <td className="py-3 px-4 text-slate-600">{tx.provider}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                            {tx.currency} {tx.amount.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {tx.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadInvoice(tx.id, tx.invoice_number || tx.order_id)}
+                              className="px-2.5 py-1 border border-slate-200 hover:bg-slate-100 rounded-lg text-[11px] font-semibold text-slate-700 cursor-pointer"
+                            >
+                              Download PDF
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-6 text-center text-slate-400">
+                          No payment transactions recorded yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Onboard Client Modal */}
@@ -1334,6 +1580,11 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
           </div>
         </div>
       )}
+      <SecuritySessionsModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        userEmail={user?.email}
+      />
     </div>
   );
 };

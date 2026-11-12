@@ -76,10 +76,10 @@ def test_high_concurrency_multi_tenant_requests():
         assert resp.json()["total_employees"] == 600
         return True
 
-    # Run 40 concurrent requests in parallel threads
+    # Run 100 concurrent requests in parallel threads simulating 100-user load
     tasks = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        for i in range(20):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=25) as executor:
+        for i in range(50):
             tasks.append(executor.submit(fetch_acme_dashboard))
             tasks.append(executor.submit(fetch_beta_dashboard))
 

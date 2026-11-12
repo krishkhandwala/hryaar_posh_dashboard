@@ -190,6 +190,8 @@ class UserSession(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     jti = Column(String(100), unique=True, index=True, nullable=False)
+    ip_address = Column(String(64), nullable=True)
+    user_agent = Column(String(255), nullable=True)
     is_revoked = Column(Boolean, default=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -403,3 +405,57 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="audit_logs")
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
+    plan_id = Column(String, ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    provider = Column(String(30), default="SANDBOX") # RAZORPAY, STRIPE, SANDBOX
+    order_id = Column(String(120), unique=True, index=True, nullable=False)
+    payment_id = Column(String(120), index=True, nullable=True)
+    signature_verified = Column(Boolean, default=False)
+    amount_cents = Column(Integer, nullable=False)
+    currency = Column(String(10), default="INR")
+    billing_cycle = Column(String(20), default="MONTHLY") # MONTHLY, ANNUAL, TOPUP
+    seats_purchased = Column(Integer, default=0)
+    status = Column(String(30), default="CREATED", index=True) # CREATED, PAID, FAILED, REFUNDED
+    invoice_number = Column(String(80), unique=True, nullable=True)
+    description = Column(String(255), nullable=True)
+    created_by_user_id = Column(String, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    company = relationship("Company")
+    plan = relationship("SubscriptionPlan")
+
+
+class ClusterKVStore(Base):
+    """Shared L2 key/counter store in PostgreSQL for stateless load-balanced API nodes when Redis is unavailable."""
+    __tablename__ = "cluster_kv_store"
+
+    key = Column(String(200), primary_key=True)
+    value_text = Column(Text, nullable=False)
+    counter_val = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClusterJob(Base):
+    """Cluster-wide persistent background job queue so jobs submitted on Node A can be polled from Node B."""
+    __tablename__ = "cluster_jobs"
+
+    id = Column(String(64), primary_key=True)
+    job_type = Column(String(100), nullable=False)
+    company_id = Column(String, nullable=True, index=True)
+    user_id = Column(String, nullable=True)
+    status = Column(String(30), default="QUEUED", index=True)
+    progress_pct = Column(Float, default=0.0)
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    node_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)

@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Trash2,
   Lock,
+  Unlock,
+  ShieldCheck,
   UploadCloud,
   ChevronRight,
   Layers,
@@ -24,9 +26,12 @@ import {
   UserPlus,
   Palette,
   X,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
+import { ImportModal } from '@/components/modals/ImportModal';
+import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
 
 interface SuperAdminDashboardProps {
   user: any;
@@ -147,6 +152,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [brandAccent, setBrandAccent] = useState('#F59E0B');
   const [brandMode, setBrandMode] = useState('CO_BRANDED');
   const [brandWelcome, setBrandWelcome] = useState('');
+  const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
+  const [importTargetCompId, setImportTargetCompId] = useState('');
+  const [billingSummary, setBillingSummary] = useState<any>(null);
+  const [gatewayStatus, setGatewayStatus] = useState<any>(null);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
 
   // New Company Form State
   const [newCompName, setNewCompName] = useState('');
@@ -173,7 +183,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, compsRes, usersRes, plansRes, , logsRes, telemetryRes] = await Promise.all([
+      const [analyticsRes, compsRes, usersRes, plansRes, , logsRes, telemetryRes, billingRes, gwRes] = await Promise.all([
         apiClient.get('/super-admin/analytics'),
         apiClient.get('/super-admin/companies'),
         apiClient.get('/super-admin/users'),
@@ -181,6 +191,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         apiClient.get('/super-admin/system-health'),
         apiClient.get('/super-admin/audit-logs'),
         apiClient.get('/cluster/telemetry'),
+        apiClient.get('/billing/summary').catch(() => ({ data: null })),
+        fetch('/api/gateway-status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
 
       setAnalytics(analyticsRes.data);
@@ -189,6 +201,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setPlans(plansRes.data);
       setAuditLogs(logsRes.data);
       setClusterTelemetry(telemetryRes.data);
+      setBillingSummary(billingRes.data);
+      setGatewayStatus(gwRes);
     } catch (e) {
       console.error('Platform data fetch error:', e);
     } finally {
@@ -509,11 +523,32 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
           <div className="flex items-center gap-2.5">
             <button
+              type="button"
+              onClick={() => setShowSecurityModal(true)}
+              className="p-2 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              title="Account Security & Active Sessions"
+            >
+              <ShieldCheck className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={loadAllData}
               className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+
+            <button
+              onClick={() => {
+                setImportTargetCompId(clientOrgs[0]?.id || '');
+                setIsImportCsvOpen(true);
+              }}
+              className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors cursor-pointer hidden sm:flex items-center gap-1.5"
+              title="Import Leap10x CSV training roster into a client organisation"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
+              <span>Import CSV</span>
             </button>
 
             <button
@@ -985,6 +1020,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                 <UserPlus className="w-3 h-3" />
                                 <span>Assign</span>
                               </button>
+                              {c.company_type !== 'PARTNER' && (
+                                <button
+                                  onClick={() => {
+                                    setImportTargetCompId(c.id);
+                                    setIsImportCsvOpen(true);
+                                  }}
+                                  className="p-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-md cursor-pointer"
+                                  title="Import Leap10x CSV Roster"
+                                >
+                                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => openCompanyBrandModal(c)}
                                 className="p-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-md cursor-pointer"
@@ -1086,7 +1133,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           <td className="py-3 px-4">
                             <StatusPill status={u.status} />
                           </td>
-                          <td className="py-3 px-5 text-right">
+                          <td className="py-3 px-5 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await apiClient.post(`/super-admin/users/${u.id}/unlock`);
+                                  alert(`Login lockout cleared for ${u.email}.`);
+                                } catch (err: any) {
+                                  alert(err.response?.data?.detail || 'Failed to unlock user.');
+                                }
+                              }}
+                              className="px-2.5 py-1 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 rounded-md text-xs font-medium cursor-pointer inline-flex items-center gap-1"
+                              title="Clear brute-force login lockout"
+                            >
+                              <Unlock className="w-3 h-3" />
+                              <span>Unlock</span>
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedUserForReset(u);
@@ -1107,49 +1169,119 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </div>
           )}
 
-          {/* TAB 5: SUBSCRIPTIONS */}
+          {/* TAB 5: SUBSCRIPTIONS & PAYMENTS */}
           {currentTab === 'subscriptions' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {plans.map((p) => (
-                <div
-                  key={p.id}
-                  className="p-5 rounded-xl bg-white border border-slate-200 flex flex-col justify-between space-y-4"
-                >
-                  <div>
-                    <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-                      {p.name}
-                    </div>
-                    <h3 className="text-base font-semibold text-slate-900 mt-0.5">{p.display_name}</h3>
-                    <div className="mt-3 text-2xl font-semibold text-slate-900 tabular-nums">
-                      ${p.price_monthly}
-                      <span className="text-xs font-normal text-slate-500"> / mo</span>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Seat limit</span>
-                        <span className="font-medium text-slate-900 tabular-nums">
-                          {p.max_employees > 0 ? p.max_employees.toLocaleString() : 'Unlimited'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Storage cap</span>
-                        <span className="font-medium text-slate-900 tabular-nums">{p.storage_limit_mb} MB</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Organisations</span>
-                        <span className="font-medium text-slate-900 tabular-nums">
-                          {companies.filter((c) => c.subscription_plan_id === p.id).length}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100">
-                    <StatusPill status="ACTIVE" />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-xl bg-white border border-slate-200">
+                  <div className="text-xs font-medium text-slate-500">Collected Revenue (INR)</div>
+                  <div className="text-2xl font-semibold text-slate-900 tabular-nums mt-1">
+                    ₹{(billingSummary?.total_collected_inr || 0).toLocaleString()}
                   </div>
                 </div>
-              ))}
+                <div className="p-5 rounded-xl bg-white border border-slate-200">
+                  <div className="text-xs font-medium text-slate-500">Collected Revenue (USD)</div>
+                  <div className="text-2xl font-semibold text-slate-900 tabular-nums mt-1">
+                    ${(billingSummary?.total_collected_usd || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-5 rounded-xl bg-white border border-slate-200">
+                  <div className="text-xs font-medium text-slate-500">Paid Invoices</div>
+                  <div className="text-2xl font-semibold text-slate-900 tabular-nums mt-1">
+                    {billingSummary?.paid_invoices_count || 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {plans.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-5 rounded-xl bg-white border border-slate-200 flex flex-col justify-between space-y-4"
+                  >
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                        {p.name}
+                      </div>
+                      <h3 className="text-base font-semibold text-slate-900 mt-0.5">{p.display_name}</h3>
+                      <div className="mt-3 text-2xl font-semibold text-slate-900 tabular-nums">
+                        ${p.price_monthly}
+                        <span className="text-xs font-normal text-slate-500"> / mo</span>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">Seat limit</span>
+                          <span className="font-medium text-slate-900 tabular-nums">
+                            {p.max_employees > 0 ? p.max_employees.toLocaleString() : 'Unlimited'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">Storage cap</span>
+                          <span className="font-medium text-slate-900 tabular-nums">{p.storage_limit_mb} MB</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">Organisations</span>
+                          <span className="font-medium text-slate-900 tabular-nums">
+                            {companies.filter((c) => c.subscription_plan_id === p.id).length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100">
+                      <StatusPill status="ACTIVE" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl bg-white border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-900">Payment Transactions &amp; Invoices</h3>
+                  <span className="text-xs text-slate-500">Razorpay / Stripe / Sandbox Ledger</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-5">Invoice</th>
+                        <th className="py-2.5 px-4">Organisation</th>
+                        <th className="py-2.5 px-4">Description</th>
+                        <th className="py-2.5 px-4">Gateway</th>
+                        <th className="py-2.5 px-4">Amount</th>
+                        <th className="py-2.5 px-5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {billingSummary?.transactions?.length > 0 ? (
+                        billingSummary.transactions.map((tx: any) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/70">
+                            <td className="py-2.5 px-5 font-mono text-[11px] font-medium text-slate-900">
+                              {tx.invoice_number || tx.order_id}
+                            </td>
+                            <td className="py-2.5 px-4 font-medium text-slate-800">{tx.company_name}</td>
+                            <td className="py-2.5 px-4 text-slate-600">{tx.description}</td>
+                            <td className="py-2.5 px-4 text-slate-600">{tx.provider}</td>
+                            <td className="py-2.5 px-4 font-mono font-medium text-slate-900 tabular-nums">
+                              {tx.currency} {tx.amount.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-5">
+                              <StatusPill status={tx.status === 'PAID' ? 'ACTIVE' : tx.status} />
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-slate-400">
+                            No payment transactions recorded yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1174,11 +1306,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Rate Limit</span>
-                      <span className="font-medium text-slate-800">25 req/min per IP</span>
+                      <span className="font-medium text-slate-800">30 req/min/IP + 5x Lockout</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-slate-500">Security Headers</span>
-                      <span className="font-medium text-emerald-700">Enabled</span>
+                      <span className="font-medium text-emerald-700">OWASP Hardened</span>
                     </div>
                   </div>
                 </div>
@@ -1240,6 +1372,70 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         {clusterTelemetry?.tier_3_data_storage?.object_storage?.used_storage_mb || 0} MB
                       </span>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="p-5 rounded-xl bg-white border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Load Balancer Upstreams</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Algorithm: <span className="font-mono">{gatewayStatus?.algorithm || 'least_conn'}</span>
+                      </p>
+                    </div>
+                    <StatusPill status="ACTIVE" />
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    {gatewayStatus?.upstreams?.length > 0 ? (
+                      gatewayStatus.upstreams.map((u: any) => (
+                        <div key={u.url} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                          <div>
+                            <div className="font-mono font-semibold text-slate-800">{u.url}</div>
+                            <div className="text-[11px] text-slate-500">
+                              Active: {u.active_connections} &bull; Handled: {u.total_handled}
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.healthy ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {u.healthy ? 'HEALTHY' : 'FAILOVER COOLDOWN'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-slate-400 py-3">Gateway routing via direct/reverse-proxy upstream.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-xl bg-white border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Active Cluster Worker Nodes</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Discovered via shared {clusterTelemetry?.tier_2_application?.distributed_cache?.backend || 'L2'} heartbeat
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                      {clusterTelemetry?.active_nodes_count || 1} node(s)
+                    </span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    {(clusterTelemetry?.active_cluster_nodes || []).map((n: any) => (
+                      <div key={n.node_id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                        <div>
+                          <div className="font-mono font-semibold text-slate-900">{n.node_id}</div>
+                          <div className="text-[11px] text-slate-500">
+                            PID {n.pid || '-'} &bull; Requests: {n.requests_handled ?? '-'}
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          ONLINE
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1812,6 +2008,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal 6: Leap10x CSV Roster Import (Platform Admin Only) */}
+      <ImportModal
+        isOpen={isImportCsvOpen}
+        onClose={() => setIsImportCsvOpen(false)}
+        companyId={importTargetCompId}
+        companies={companies}
+        onSuccess={loadAllData}
+      />
+
+      <SecuritySessionsModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        userEmail={user?.email}
+      />
     </div>
   );
 };

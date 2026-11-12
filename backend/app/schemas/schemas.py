@@ -56,6 +56,23 @@ class UserUpdate(BaseModel):
 class UserResetPassword(BaseModel):
     new_password: str
 
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UserSessionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    jti: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    is_revoked: bool
+    is_current: bool = False
+    created_at: datetime
+    expires_at: datetime
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

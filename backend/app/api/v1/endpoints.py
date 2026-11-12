@@ -2,7 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_permission
+from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_permission, require_super_admin
 from app.models.models import (
     User, Company, CompanySettings, Employee, Webinar, ComplianceDocument, 
     AuditLog, ImportJob, Complaint, InternalCommitteeMember
@@ -483,8 +483,8 @@ def list_employees(
     search: Optional[str] = None,
     department: Optional[str] = None,
     training_status: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(1500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("company.employees.read"))
 ):
@@ -564,8 +564,10 @@ async def import_csv_data(
     file: UploadFile = File(...),
     company_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("company.employees.import"))
+    current_user: User = Depends(require_super_admin)
 ):
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Target client company_id is required for Leap10x CSV import")
     tenant_id = get_tenant_company_id(company_id, current_user, db)
     content = await file.read()
     res = CSVImportService.process_csv(

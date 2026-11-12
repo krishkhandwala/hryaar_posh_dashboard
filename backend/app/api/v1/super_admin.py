@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.deps import require_super_admin
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, validate_password_strength
 from app.core.config import settings
 from app.core.distributed_cache import distributed_cache
 from app.models.models import (
@@ -515,6 +515,10 @@ def create_platform_user(
         if not comp:
             raise HTTPException(status_code=404, detail="Specified company does not exist")
 
+    pw_err = validate_password_strength(payload.password)
+    if pw_err:
+        raise HTTPException(status_code=400, detail=pw_err)
+
     user = User(
         email=payload.email,
         full_name=payload.full_name,
@@ -607,7 +611,16 @@ def reset_user_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    pw_err = validate_password_strength(payload.new_password)
+    if pw_err:
+        raise HTTPException(status_code=400, detail=pw_err)
+
     user.hashed_password = get_password_hash(payload.new_password)
+    # Also clear any active brute-force lockout for the account upon admin reset
+    normalized_email = user.email.strip().lower()
+    distributed_cache.delete(f"auth_fail:{normalized_email}")
+    distributed_cache.delete(f"auth_lock:{normalized_email}")
+
     audit = AuditLog(
         company_id=user.company_id,
         actor_user_id=admin.id,
@@ -619,6 +632,32 @@ def reset_user_password(
     db.commit()
 
     return {"status": "success", "message": f"Password for {user.email} successfully updated."}
+
+
+@router.post("/users/{user_id}/unlock")
+def unlock_user_account(
+    user_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin)
+):
+    """Clears distributed brute-force login lockout for a user."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_email = user.email.strip().lower()
+    distributed_cache.delete(f"auth_fail:{normalized_email}")
+    distributed_cache.delete(f"auth_lock:{normalized_email}")
+
+    db.add(AuditLog(
+        company_id=user.company_id,
+        actor_user_id=admin.id,
+        user_email=admin.email,
+        action="USER_ACCOUNT_UNLOCKED",
+        details=f"Super Admin cleared login lockout for '{user.email}'"
+    ))
+    db.commit()
+    return {"status": "success", "message": f"Lockout cleared for {user.email}."}
 
 # ==========================================
 # 3. SUBSCRIPTIONS & COMMERCIALIZATION

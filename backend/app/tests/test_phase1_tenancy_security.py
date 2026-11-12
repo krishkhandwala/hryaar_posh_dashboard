@@ -317,4 +317,165 @@ def test_partner_and_client_branding_isolation():
     assert forbidden.status_code == 403
 
 
+def test_leap10x_csv_import_restricted_to_super_admin_only():
+    """
+    Only HRYAAR Master Platform Admins (SUPER_ADMIN / PLATFORM_ADMIN) may import Leap10x CSV rosters.
+    Partner, Client HR, and Employee roles must all be rejected with 403 Forbidden.
+    """
+    import io
+
+    csv_payload = (
+        "employee_code,name,email,department,progress,score\n"
+        f"LEAP-{uuid.uuid4().hex[:4]},Test Learner,leap.{uuid.uuid4().hex[:6]}@acmecorp.com,Engineering,100,90.0\n"
+    ).encode("utf-8")
+
+    # 1. Client HR (COMPANY_ADMIN), Partner (PARTNER_ADMIN), and Employee (EMPLOYEE) must get 403
+    for email, pwd in [
+        ("hr@acme.com", "Acme@1234"),
+        ("partner@talentpro.com", "Partner@1234"),
+        ("rohan.reddy194@acmecorp.com", "Employee@1234"),
+    ]:
+        res = _login(email, pwd)
+        assert res.status_code == 200
+        tok = res.json()["access_token"]
+        imp_res = client.post(
+            "/api/v1/import/csv?company_id=c-acme-corp-1250",
+            headers={"Authorization": f"Bearer {tok}"},
+            files={"file": ("leap10x.csv", io.BytesIO(csv_payload), "text/csv")},
+        )
+        assert imp_res.status_code == 403, f"Expected 403 for {email}, got {imp_res.status_code}"
+
+    # 2. Platform Master Admin (SUPER_ADMIN) succeeds targeting a specific client company
+    leap_code = f"LEAP-{uuid.uuid4().hex[:4]}"
+    leap_email = f"leap.{uuid.uuid4().hex[:6]}@acmecorp.com"
+    leap_payload = (
+        "employee_code,name,email,department,progress,score\n"
+        f"{leap_code},Test Learner,{leap_email},Engineering,100,90.0\n"
+    ).encode("utf-8")
+    sa_res = _login("tech@hryaar.com", "Admin@1234")
+    assert sa_res.status_code == 200
+    sa_tok = sa_res.json()["access_token"]
+    sa_imp = client.post(
+        "/api/v1/import/csv?company_id=c-acme-corp-1250",
+        headers={"Authorization": f"Bearer {sa_tok}"},
+        files={"file": ("leap10x.csv", io.BytesIO(leap_payload), "text/csv")},
+    )
+    assert sa_imp.status_code == 200, sa_imp.text
+    assert sa_imp.json()["success"] is True
+    assert sa_imp.json()["successful_rows"] == 1
+
+    # Cleanup inserted test employees to preserve seeded count invariants
+    from app.models.models import Employee
+    db = SessionLocal()
+    try:
+        db.query(Employee).filter(Employee.employee_code.like("LEAP-%")).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_payment_checkout_signature_verification_and_invoice_pdf():
+    """
+    Verifies full billing workflow:
+    - Plans catalog & payment checkout (server-computed pricing)
+    - Rejects forged HMAC signatures (400) and cross-tenant verify/invoice access (403)
+    - Valid signature atomically upgrades partner seat pool & generates PDF invoice
+    """
+    from app.models.models import PaymentTransaction, Company
+
+    p_login = _login("partner@talentpro.com", "Partner@1234")
+    assert p_login.status_code == 200
+    p_tok = p_login.json()["access_token"]
+    p_headers = {"Authorization": f"Bearer {p_tok}"}
+
+    other_p_login = _login("partner@apex.com", "Partner@1234")
+    assert other_p_login.status_code == 200
+    other_headers = {"Authorization": f"Bearer {other_p_login.json()['access_token']}"}
+
+    # 1. Fetch billing plans
+    plans_res = client.get("/api/v1/billing/plans", headers=p_headers)
+    assert plans_res.status_code == 200
+    assert len(plans_res.json()["plans"]) >= 3
+
+    # 2. Initiate seat pack checkout (+100 seats)
+    chk_res = client.post(
+        "/api/v1/billing/checkout",
+        headers=p_headers,
+        json={"provider": "SANDBOX", "currency": "INR", "billing_cycle": "TOPUP", "seats_to_add": 100},
+    )
+    assert chk_res.status_code == 200
+    chk = chk_res.json()
+    assert chk["amount_cents"] > 0
+
+    # 3. Forged signature must fail (400)
+    bad_ver = client.post(
+        "/api/v1/billing/verify",
+        headers=p_headers,
+        json={"order_id": chk["order_id"], "payment_id": chk["sandbox_payment_id"], "signature": "forged_sig"},
+    )
+    assert bad_ver.status_code == 400
+
+    # 4. Cross-tenant verification must fail (403)
+    cross_ver = client.post(
+        "/api/v1/billing/verify",
+        headers=other_headers,
+        json={
+            "order_id": chk["order_id"],
+            "payment_id": chk["sandbox_payment_id"],
+            "signature": chk["sandbox_signature"],
+        },
+    )
+    assert cross_ver.status_code == 403
+
+    # 5. Valid signature succeeds & increases seat pool
+    ok_ver = client.post(
+        "/api/v1/billing/verify",
+        headers=p_headers,
+        json={
+            "order_id": chk["order_id"],
+            "payment_id": chk["sandbox_payment_id"],
+            "signature": chk["sandbox_signature"],
+        },
+    )
+    assert ok_ver.status_code == 200
+    assert ok_ver.json()["status"] == "PAID"
+    assert "INV-POSH-" in ok_ver.json()["invoice_number"]
+
+    tx_id = ok_ver.json()["transaction_id"]
+
+    # 6. Partner can download PDF invoice, another partner receives 403
+    pdf_res = client.get(f"/api/v1/billing/invoices/{tx_id}/pdf", headers=p_headers)
+    assert pdf_res.status_code == 200
+    assert pdf_res.headers["content-type"].startswith("application/pdf")
+    assert pdf_res.content.startswith(b"%PDF")
+
+    cross_pdf = client.get(f"/api/v1/billing/invoices/{tx_id}/pdf", headers=other_headers)
+    assert cross_pdf.status_code == 403
+
+    # Restore quota & remove synthetic test transaction so seeded state stays clean
+    db = SessionLocal()
+    try:
+        comp = db.query(Company).filter(Company.id == "p-talentpro-hr").first()
+        if comp:
+            comp.assigned_seat_quota = max(5000, (comp.assigned_seat_quota or 5100) - 100)
+        db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_cluster_telemetry_does_not_leak_global_counts_to_tenants():
+    hr_res = _login("hr@acme.com", "Acme@1234")
+    assert hr_res.status_code == 200
+    headers = {"Authorization": f"Bearer {hr_res.json()['access_token']}"}
+    tel = client.get("/api/v1/cluster/telemetry", headers=headers)
+    assert tel.status_code == 200
+    counts = tel.json()["tier_3_data_storage"]["entity_counts"]
+    assert counts["companies"] == 1
+    assert counts["employees"] == 1250
+    assert counts["complaints"] == 0
+
+
+
+
 

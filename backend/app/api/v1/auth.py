@@ -1,23 +1,42 @@
 import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.models import User, Company, AuditLog, Employee, UserSession
-from app.schemas.schemas import Token, UserLogin, UserCreate, UserOut
+from app.schemas.schemas import (
+    Token, UserLogin, UserCreate, UserOut, PasswordChangeRequest, UserSessionOut
+)
 from app.core.security import (
-    verify_password, get_password_hash, create_access_token, needs_password_rehash
+    verify_password, get_password_hash, create_access_token, needs_password_rehash, validate_password_strength
 )
 from app.core.config import settings
 from app.core.deps import get_current_user, oauth2_scheme
+from app.core.distributed_cache import distributed_cache
+from app.core.middleware import _resolve_client_ip
 from app.core.permissions import resolve_workspace, resolve_navigation, get_user_permissions
 
 router = APIRouter()
 
+AUTH_LOCKOUT_MAX_ATTEMPTS = 5
+AUTH_LOCKOUT_WINDOW_SECONDS = 900  # 15 minutes
+
 
 @router.post("/login", response_model=Token)
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
+def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)):
+    normalized_email = login_data.email.strip().lower()
+    lock_key = f"auth_lock:{normalized_email}"
+    fail_key = f"auth_fail:{normalized_email}"
+
+    if distributed_cache.get(lock_key) is True:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account temporarily locked due to repeated failed login attempts. Retry in 15 minutes or ask your administrator to unlock.",
+            headers={"Retry-After": str(AUTH_LOCKOUT_WINDOW_SECONDS)},
+        )
+
     # 1. Look up authenticated user by email
     user = db.query(User).filter(User.email == login_data.email).first()
 
@@ -49,11 +68,27 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
                     db.refresh(user)
 
     if not user or not verify_password(login_data.password, user.hashed_password):
+        attempts = distributed_cache.incr_window(fail_key, AUTH_LOCKOUT_WINDOW_SECONDS)
+        if attempts >= AUTH_LOCKOUT_MAX_ATTEMPTS:
+            distributed_cache.set(lock_key, True, ttl_seconds=AUTH_LOCKOUT_WINDOW_SECONDS)
+            db.add(AuditLog(
+                company_id=user.company_id if user else None,
+                actor_user_id=user.id if user else None,
+                user_email=login_data.email,
+                action="AUTH_ACCOUNT_LOCKED",
+                ip_address=_resolve_client_ip(request),
+                details=f"Account temporarily locked across cluster after {attempts} failed login attempts.",
+            ))
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect corporate email, employee code, or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Valid credentials: clear any distributed failed-attempt counter
+    distributed_cache.delete(fail_key)
+    distributed_cache.delete(lock_key)
 
     if not user.is_active or user.status == "SUSPENDED":
         raise HTTPException(status_code=403, detail="Account is deactivated or suspended")
@@ -73,6 +108,8 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             )
 
     user.last_login_at = datetime.utcnow()
+    client_ip = _resolve_client_ip(request)
+    user_agent = (request.headers.get("User-Agent") or "Unknown Client")[:250]
 
     # Create trackable, revocable UserSession
     jti = str(uuid.uuid4())
@@ -80,6 +117,8 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     db.add(UserSession(
         user_id=user.id,
         jti=jti,
+        ip_address=client_ip,
+        user_agent=user_agent,
         is_revoked=False,
         expires_at=session_expires
     ))
@@ -89,8 +128,9 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         company_id=user.company_id,
         actor_user_id=user.id,
         user_email=user.email,
+        ip_address=client_ip,
         action="USER_LOGIN_SUCCESS",
-        details=f"Successful authentication for role {user.role}"
+        details=f"Successful authentication for role {user.role} via {settings.CLUSTER_NODE_ID}"
     ))
     db.commit()
 
@@ -173,17 +213,23 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/logout")
 def logout(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Revokes the current JWT session (via jti) so the token can no longer be used.
+    Revokes the current JWT session (via jti) across PostgreSQL and cluster cache so the token can no longer be used.
     """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         jti = payload.get("jti")
         if jti:
+            distributed_cache.set(
+                f"revoked_jti:{jti}",
+                True,
+                ttl_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            )
             session = db.query(UserSession).filter(UserSession.jti == jti).first()
             if session:
                 session.is_revoked = True
@@ -191,6 +237,7 @@ def logout(
                 db.add(UserSession(
                     user_id=current_user.id,
                     jti=jti,
+                    ip_address=_resolve_client_ip(request),
                     is_revoked=True,
                     expires_at=datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
                 ))
@@ -201,11 +248,165 @@ def logout(
         company_id=current_user.company_id,
         actor_user_id=current_user.id,
         user_email=current_user.email,
+        ip_address=_resolve_client_ip(request),
         action="USER_LOGOUT",
         details="User session revoked on logout"
     ))
     db.commit()
     return {"status": "success", "message": "Session revoked successfully"}
+
+
+@router.get("/sessions", response_model=List[UserSessionOut])
+def list_active_sessions(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lists active, non-expired login sessions for the authenticated user."""
+    current_jti = None
+    try:
+        current_jti = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]).get("jti")
+    except JWTError:
+        pass
+
+    now = datetime.utcnow()
+    sessions = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == current_user.id,
+            UserSession.is_revoked == False,
+            UserSession.expires_at > now,
+        )
+        .order_by(UserSession.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return [
+        UserSessionOut(
+            id=s.id,
+            jti=s.jti,
+            ip_address=s.ip_address,
+            user_agent=s.user_agent,
+            is_revoked=s.is_revoked,
+            is_current=(s.jti == current_jti),
+            created_at=s.created_at,
+            expires_at=s.expires_at,
+        )
+        for s in sessions
+    ]
+
+
+@router.post("/sessions/revoke-others")
+def revoke_other_sessions(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Immediately revokes every active session for this user except the current device."""
+    current_jti = None
+    try:
+        current_jti = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]).get("jti")
+    except JWTError:
+        pass
+
+    q = db.query(UserSession).filter(UserSession.user_id == current_user.id, UserSession.is_revoked == False)
+    if current_jti:
+        q = q.filter(UserSession.jti != current_jti)
+    sessions = q.all()
+
+    revoked_count = 0
+    for s in sessions:
+        s.is_revoked = True
+        distributed_cache.set(f"revoked_jti:{s.jti}", True, ttl_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+        revoked_count += 1
+
+    db.add(AuditLog(
+        company_id=current_user.company_id,
+        actor_user_id=current_user.id,
+        user_email=current_user.email,
+        ip_address=_resolve_client_ip(request),
+        action="USER_OTHER_SESSIONS_REVOKED",
+        details=f"Signed out {revoked_count} other active session(s) across cluster."
+    ))
+    db.commit()
+    return {"status": "success", "revoked_count": revoked_count}
+
+
+@router.post("/sessions/{session_id}/revoke")
+def revoke_single_session(
+    session_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Revokes a specific session belonging to the authenticated user."""
+    session = db.query(UserSession).filter(
+        UserSession.id == session_id,
+        UserSession.user_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session.is_revoked = True
+    distributed_cache.set(f"revoked_jti:{session.jti}", True, ttl_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    db.add(AuditLog(
+        company_id=current_user.company_id,
+        actor_user_id=current_user.id,
+        user_email=current_user.email,
+        ip_address=_resolve_client_ip(request),
+        action="USER_SESSION_REVOKED",
+        details=f"Revoked session {session.id}"
+    ))
+    db.commit()
+    return {"status": "success", "message": "Session revoked"}
+
+
+@router.post("/change-password")
+def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Self-service password rotation with complexity enforcement and other-session revocation."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+
+    err = validate_password_strength(payload.new_password)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="New password must differ from current password.")
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+
+    # Revoke all other sessions when credentials rotate
+    current_jti = None
+    try:
+        current_jti = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]).get("jti")
+    except JWTError:
+        pass
+
+    q = db.query(UserSession).filter(UserSession.user_id == current_user.id, UserSession.is_revoked == False)
+    if current_jti:
+        q = q.filter(UserSession.jti != current_jti)
+    for s in q.all():
+        s.is_revoked = True
+        distributed_cache.set(f"revoked_jti:{s.jti}", True, ttl_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+
+    db.add(AuditLog(
+        company_id=current_user.company_id,
+        actor_user_id=current_user.id,
+        user_email=current_user.email,
+        ip_address=_resolve_client_ip(request),
+        action="USER_PASSWORD_CHANGED",
+        details="User rotated account password and invalidated other active sessions."
+    ))
+    db.commit()
+    return {"status": "success", "message": "Password updated cleanly and other devices signed out."}
 
 
 @router.get("/me")
