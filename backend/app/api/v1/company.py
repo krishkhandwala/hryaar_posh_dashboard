@@ -1,19 +1,24 @@
 import os
 import uuid
+import csv
+import io
+import json
 from datetime import datetime
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Form
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_company_admin, require_permission
+from app.core.deps import get_current_user, get_tenant_company_id, require_role, require_company_admin, require_permission, require_branding_admin
 from app.core.permissions import user_has_permission
 from app.core.security import get_password_hash
 from app.core.config import settings
+from app.services.event_bus import publish_realtime_event
 from app.models.models import (
     Company, CompanySettings, User, Employee, Complaint, 
     InternalCommitteeMember, Subscription, SubscriptionPlan, AuditLog,
-    CompanyAPIKey, Webinar
+    CompanyAPIKey, Webinar, ClientServiceRequest
 )
 from app.schemas.schemas import (
     CompanyOut, CompanyUpdate, CompanyBrandingOut, CompanyBrandingUpdate,
@@ -139,7 +144,7 @@ def get_company_branding(
 def update_company_branding(
     payload: CompanyBrandingUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_company_admin)
+    current_user: User = Depends(require_branding_admin)
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     comp = db.query(Company).filter(Company.id == tenant_id).first()
@@ -171,7 +176,7 @@ def update_company_branding(
 async def upload_branding_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_company_admin)
+    current_user: User = Depends(require_branding_admin)
 ):
     tenant_id = get_tenant_company_id(None, current_user, db)
     comp = db.query(Company).filter(Company.id == tenant_id).first()
@@ -830,6 +835,317 @@ def simulate_lms_sync(
         "synced_at": datetime.utcnow().isoformat(),
         "source": "Leap10x LMS Enterprise Webhook Relay",
         "message": f"Successfully synchronized {synced_count} employee learning records from LMS pipeline."
+    }
+
+
+# ==========================================
+# 6. EMPLOYEE CREDITS & QUOTA STATUS
+# ==========================================
+
+@router.get("/credits")
+def get_company_credit_status(
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Authoritative credit & capacity quota status for client companies."""
+    tenant_id = get_tenant_company_id(company_id, current_user, db)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    total_quota = comp.assigned_seat_quota or 1500
+    used_credits = db.query(Employee).filter(Employee.company_id == tenant_id).count()
+    remaining = max(0, total_quota - used_credits)
+    is_exhausted = remaining <= 0
+    is_near = (remaining <= 50) or ((used_credits / max(total_quota, 1)) >= 0.90)
+
+    return {
+        "company_id": comp.id,
+        "company_name": comp.name,
+        "credits_total": total_quota,
+        "credits_used": used_credits,
+        "credits_remaining": remaining,
+        "is_exhausted": is_exhausted,
+        "is_near_exhaustion": is_near,
+        "utilization_pct": round((used_credits / max(total_quota, 1)) * 100, 1),
+        "seat_price_inr": 200,
+        "seat_price_usd": 2.50,
+        "currency": settings.PAYMENT_CURRENCY
+    }
+
+
+# ==========================================
+# 7. SERVICE REQUESTS (CSV ROSTER & CONCERNS)
+# ==========================================
+
+class EmployeeAdditionItem(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    department: Optional[str] = "General"
+    designation: Optional[str] = "Team Member"
+    notes: Optional[str] = None
+
+class EmployeeAdditionPayload(BaseModel):
+    employees: List[EmployeeAdditionItem]
+    notes: Optional[str] = None
+
+class CorporateConcernPayload(BaseModel):
+    title: str
+    category: str = "GENERAL"
+    priority: str = "NORMAL"
+    description: str
+
+
+@router.get("/service-requests")
+def list_client_service_requests(
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Lists requests submitted by this company (CSV uploads, employee adds, concerns)."""
+    tenant_id = get_tenant_company_id(company_id, current_user, db)
+    requests = db.query(ClientServiceRequest).filter(
+        ClientServiceRequest.company_id == tenant_id
+    ).order_by(ClientServiceRequest.created_at.desc()).limit(100).all()
+
+    return [
+        {
+            "id": r.id,
+            "company_id": r.company_id,
+            "request_type": r.request_type,
+            "title": r.title,
+            "description": r.description,
+            "category": r.category,
+            "priority": r.priority,
+            "file_url": r.file_url,
+            "filename": r.filename,
+            "row_count": r.row_count,
+            "status": r.status,
+            "admin_notes": r.admin_notes,
+            "payload": json.loads(r.payload_json) if r.payload_json else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in requests
+    ]
+
+
+@router.post("/service-requests/upload-csv")
+async def client_upload_csv_roster(
+    file: UploadFile = File(...),
+    notes: Optional[str] = Form(None),
+    company_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_company_admin)
+):
+    """
+    Client uploads employee CSV roster (names, emails, phones, department, designation).
+    Calculates remaining credits, saves file for Super Admin access, and notifies Super Admin.
+    """
+    tenant_id = get_tenant_company_id(company_id, current_user, db)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    content = await file.read()
+    try:
+        text_content = content.decode("utf-8-sig")
+    except Exception:
+        text_content = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text_content))
+    rows = []
+    for r in reader:
+        clean_row = {k.strip().lower(): (v.strip() if v else "") for k, v in r.items() if k}
+        name = clean_row.get("name") or f"{clean_row.get('first_name', '')} {clean_row.get('last_name', '')}".strip()
+        email = clean_row.get("email") or clean_row.get("corporate_email") or ""
+        phone = clean_row.get("phone") or clean_row.get("number") or clean_row.get("mobile") or clean_row.get("contact_number") or ""
+        dept = clean_row.get("department") or "General"
+        designation = clean_row.get("designation") or "Team Member"
+        
+        if email or name:
+            rows.append({
+                "name": name or email,
+                "email": email,
+                "phone": phone,
+                "department": dept,
+                "designation": designation
+            })
+
+    row_count = len(rows)
+    if row_count == 0:
+        raise HTTPException(status_code=400, detail="CSV file contains no valid employee rows.")
+
+    used_credits = db.query(Employee).filter(Employee.company_id == tenant_id).count()
+    quota = comp.assigned_seat_quota or 1500
+    remaining = max(0, quota - used_credits)
+    exceeds_quota = row_count > remaining
+
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    clean_filename = f"roster_{comp.slug}_{uuid.uuid4().hex[:8]}.csv"
+    filepath = os.path.join(settings.UPLOAD_DIR, clean_filename)
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    file_url = f"/static/uploads/{clean_filename}"
+
+    service_req = ClientServiceRequest(
+        company_id=tenant_id,
+        submitted_by_user_id=current_user.id,
+        request_type="CSV_ROSTER_UPLOAD",
+        title=f"Employee Roster Import ({row_count} employees)",
+        description=notes or f"Roster submitted by {current_user.full_name or current_user.email} with {row_count} employee records.",
+        category="ENROLLMENT",
+        priority="NORMAL" if not exceeds_quota else "HIGH",
+        file_url=file_url,
+        filename=file.filename,
+        row_count=row_count,
+        status="PENDING",
+        payload_json=json.dumps({
+            "total_rows": row_count,
+            "preview": rows[:5],
+            "remaining_credits": remaining,
+            "exceeds_quota": exceeds_quota
+        })
+    )
+    db.add(service_req)
+
+    publish_realtime_event(
+        db=db,
+        event_type="CSV_ROSTER_SUBMITTED",
+        title="Client CSV Roster Submitted",
+        message=f"{comp.name} uploaded a roster containing {row_count} employees ({'Within quota' if not exceeds_quota else f'Requires +{row_count - remaining} seat credits'}).",
+        company_id=comp.id,
+        user_id=current_user.id,
+        payload={
+            "request_id": service_req.id,
+            "filename": file.filename,
+            "row_count": row_count,
+            "file_url": file_url,
+            "exceeds_quota": exceeds_quota
+        }
+    )
+
+    db.commit()
+    db.refresh(service_req)
+
+    return {
+        "status": "success",
+        "request_id": service_req.id,
+        "filename": file.filename,
+        "row_count": row_count,
+        "file_url": file_url,
+        "remaining_credits": remaining,
+        "exceeds_quota": exceeds_quota,
+        "preview": rows[:5],
+        "message": "CSV Roster successfully submitted for Super Admin review and enrollment."
+    }
+
+
+@router.post("/service-requests/employee-addition")
+def client_request_employee_addition(
+    payload: EmployeeAdditionPayload,
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_company_admin)
+):
+    """Client submits individual or batch employee addition requests."""
+    tenant_id = get_tenant_company_id(company_id, current_user, db)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    count = len(payload.employees)
+    if count == 0:
+        raise HTTPException(status_code=400, detail="Provide at least one employee to add.")
+
+    used_credits = db.query(Employee).filter(Employee.company_id == tenant_id).count()
+    quota = comp.assigned_seat_quota or 1500
+    remaining = max(0, quota - used_credits)
+
+    service_req = ClientServiceRequest(
+        company_id=tenant_id,
+        submitted_by_user_id=current_user.id,
+        request_type="EMPLOYEE_ADDITION",
+        title=f"Request to add {count} employee(s)",
+        description=payload.notes or f"Requested {count} employee enrollments for {comp.name}.",
+        category="ENROLLMENT",
+        priority="NORMAL",
+        row_count=count,
+        status="PENDING",
+        payload_json=json.dumps({
+            "employees": [e.model_dump() for e in payload.employees],
+            "remaining_credits": remaining
+        })
+    )
+    db.add(service_req)
+
+    publish_realtime_event(
+        db=db,
+        event_type="EMPLOYEE_REQUEST_SUBMITTED",
+        title="Employee Addition Request",
+        message=f"{comp.name} requested onboarding of {count} employee(s).",
+        company_id=comp.id,
+        user_id=current_user.id,
+        payload={"request_id": service_req.id, "count": count}
+    )
+
+    db.commit()
+    db.refresh(service_req)
+
+    return {
+        "status": "success",
+        "request_id": service_req.id,
+        "count": count,
+        "message": f"Successfully submitted request to add {count} employee(s)."
+    }
+
+
+@router.post("/service-requests/concern")
+def client_submit_concern(
+    payload: CorporateConcernPayload,
+    company_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_company_admin)
+):
+    """Client submits operational concerns, inquiry assistance, or compliance requests to Super Admin."""
+    tenant_id = get_tenant_company_id(company_id, current_user, db)
+    comp = db.query(Company).filter(Company.id == tenant_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    service_req = ClientServiceRequest(
+        company_id=tenant_id,
+        submitted_by_user_id=current_user.id,
+        request_type="CORPORATE_CONCERN",
+        title=payload.title,
+        description=payload.description,
+        category=payload.category,
+        priority=payload.priority,
+        status="PENDING",
+        payload_json=json.dumps({"submitted_by": current_user.full_name or current_user.email})
+    )
+    db.add(service_req)
+
+    publish_realtime_event(
+        db=db,
+        event_type="CLIENT_CONCERN_SUBMITTED",
+        title=f"Client Concern: {payload.title}",
+        message=f"[{payload.priority}] {comp.name}: {payload.description[:100]}...",
+        company_id=comp.id,
+        user_id=current_user.id,
+        payload={"request_id": service_req.id, "category": payload.category, "priority": payload.priority}
+    )
+
+    db.commit()
+    db.refresh(service_req)
+
+    return {
+        "status": "success",
+        "request_id": service_req.id,
+        "message": "Your request has been logged and transmitted to the Super Admin Operations Desk."
     }
 
 

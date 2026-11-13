@@ -1,17 +1,22 @@
 import os
 import uuid
+import json
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.deps import require_super_admin
 from app.core.security import get_password_hash, validate_password_strength
 from app.core.config import settings
 from app.core.distributed_cache import distributed_cache
+from app.services.event_bus import publish_realtime_event
+from app.services.csv_service import CSVImportService
 from app.models.models import (
     Company, CompanySettings, User, Employee, Complaint, 
-    SubscriptionPlan, Subscription, AuditLog, Webinar, ComplianceDocument
+    SubscriptionPlan, Subscription, AuditLog, Webinar, ComplianceDocument,
+    ClientServiceRequest
 )
 from app.schemas.schemas import (
     CompanyOut, CompanyCreate, CompanyUpdate, CompanyStatusUpdate,
@@ -829,3 +834,127 @@ def get_platform_audit_logs(
             (AuditLog.user_email.ilike(search_fmt))
         )
     return query.order_by(AuditLog.created_at.desc()).limit(limit).all()
+
+
+# ==========================================
+# 6. CLIENT SERVICE REQUESTS & CSV WORKBENCH
+# ==========================================
+
+class ServiceRequestUpdatePayload(BaseModel):
+    status: str # APPROVED, COMPLETED, REJECTED, IN_REVIEW
+    admin_notes: Optional[str] = None
+    auto_ingest: bool = False
+
+
+@router.get("/service-requests")
+def get_all_service_requests(
+    status: Optional[str] = None,
+    request_type: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin)
+):
+    """Super Admin view of all client CSV roster uploads, employee add requests, and corporate concerns."""
+    query = db.query(ClientServiceRequest)
+    if status and status != "ALL":
+        query = query.filter(ClientServiceRequest.status == status)
+    if request_type and request_type != "ALL":
+        query = query.filter(ClientServiceRequest.request_type == request_type)
+
+    requests = query.order_by(ClientServiceRequest.created_at.desc()).limit(limit).all()
+    results = []
+    for r in requests:
+        comp = db.query(Company).filter(Company.id == r.company_id).first()
+        user = db.query(User).filter(User.id == r.submitted_by_user_id).first() if r.submitted_by_user_id else None
+        results.append({
+            "id": r.id,
+            "company_id": r.company_id,
+            "company_name": comp.name if comp else r.company_id,
+            "company_slug": comp.slug if comp else "",
+            "submitted_by_name": user.full_name if user else "Client Admin",
+            "submitted_by_email": user.email if user else "",
+            "request_type": r.request_type,
+            "title": r.title,
+            "description": r.description,
+            "category": r.category,
+            "priority": r.priority,
+            "file_url": r.file_url,
+            "filename": r.filename,
+            "row_count": r.row_count,
+            "status": r.status,
+            "admin_notes": r.admin_notes,
+            "payload": json.loads(r.payload_json) if r.payload_json else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        })
+    return results
+
+
+@router.patch("/service-requests/{request_id}")
+def update_service_request_status(
+    request_id: str,
+    payload: ServiceRequestUpdatePayload,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin)
+):
+    """Super Admin review action on client service request with optional automated CSV ingestion."""
+    req = db.query(ClientServiceRequest).filter(ClientServiceRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Service request not found")
+
+    old_status = req.status
+    req.status = payload.status
+    if payload.admin_notes:
+        req.admin_notes = payload.admin_notes
+    req.updated_at = datetime.utcnow()
+
+    comp = db.query(Company).filter(Company.id == req.company_id).first()
+    comp_name = comp.name if comp else req.company_id
+
+    ingested_count = 0
+    # Auto-ingest CSV employees if approved
+    if payload.auto_ingest and payload.status in ["APPROVED", "COMPLETED"] and req.request_type == "CSV_ROSTER_UPLOAD" and req.file_url:
+        try:
+            # Resolve physical filepath from file_url (/static/uploads/filename)
+            rel_path = req.file_url.replace("/static/uploads/", "")
+            full_path = os.path.join(settings.UPLOAD_DIR, rel_path)
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as f:
+                    file_bytes = f.read()
+                res = CSVImportService.process_csv(
+                    file_bytes=file_bytes,
+                    filename=req.filename or "roster.csv",
+                    company_id=req.company_id,
+                    db=db,
+                    user_email=admin.email
+                )
+                ingested_count = res.get("imported_rows", 0)
+        except Exception as e:
+            req.admin_notes = f"{req.admin_notes or ''} [Ingest error: {e}]"
+
+    # Dispatch Realtime push update to Client
+    publish_realtime_event(
+        db=db,
+        event_type="SERVICE_REQUEST_UPDATED",
+        title=f"Request {payload.status}: {req.title}",
+        message=f"Super Admin updated request status from {old_status} to {payload.status}. {f'{ingested_count} employees enrolled.' if ingested_count > 0 else ''}",
+        company_id=req.company_id,
+        user_id=admin.id,
+        payload={
+            "request_id": req.id,
+            "status": req.status,
+            "ingested_count": ingested_count,
+            "admin_notes": req.admin_notes
+        }
+    )
+
+    db.commit()
+    db.refresh(req)
+
+    return {
+        "status": "success",
+        "request_id": req.id,
+        "new_status": req.status,
+        "ingested_count": ingested_count,
+        "message": f"Successfully updated request to {payload.status}."
+    }

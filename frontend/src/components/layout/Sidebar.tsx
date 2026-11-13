@@ -16,7 +16,9 @@ import {
   Palette,
   ArrowLeft,
   Webhook,
-  Shield
+  Shield,
+  UploadCloud,
+  CreditCard
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 
@@ -63,6 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const displayBrandLogo = isWhiteLabel ? (partnerLogoUrl || logoUrl) : logoUrl;
   const canViewGrievances = permissions.includes('ic.grievances.read') || userRole === 'IC_MEMBER';
   const isICWorkspace = workspace === 'IC_WORKSPACE' || userRole === 'IC_MEMBER';
+  const isBrandingAdmin = ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PARTNER_ADMIN', 'MIDDLEMAN_ADMIN'].includes(userRole) || isSuperAdminSupervision;
 
   const navSections = isICWorkspace
     ? [
@@ -81,6 +84,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           items: [
             { id: 'dashboard', label: 'Dashboard Pulse', icon: LayoutDashboard, badge: 'Live' },
             { id: 'employees', label: 'Employee Audit Roster', icon: Users2 },
+            { id: 'roster-requests', label: 'Roster Upload & Requests', icon: UploadCloud, badge: 'New' },
+          ],
+        },
+        {
+          group: 'Administration & Operations',
+          items: [
+            { id: 'billing', label: 'Employee Credits & Plans', icon: CreditCard },
+            { id: 'settings', label: 'Organisation Settings', icon: Sliders },
+            ...(isBrandingAdmin
+              ? [{ id: 'branding', label: 'Branding & Themes', icon: Palette, badge: 'Admin' }]
+              : []),
           ],
         },
       ];

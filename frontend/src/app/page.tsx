@@ -19,6 +19,8 @@ import { QuizAssessmentModal } from '@/components/dashboard/QuizAssessmentModal'
 import { SuperAdminDashboard } from '@/components/superadmin/SuperAdminDashboard';
 import { PartnerDashboard } from '@/components/partner/PartnerDashboard';
 import { EmployeeLearnerPortal } from '@/components/learner/EmployeeLearnerPortal';
+import { RosterAndRequestsView } from '@/components/dashboard/RosterAndRequestsView';
+import { RazorpayCheckoutModal } from '@/components/modals/RazorpayCheckoutModal';
 import { apiClient } from '@/lib/api';
 import { applyTheme } from '@/lib/brand';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
@@ -631,6 +633,7 @@ export default function Home() {
           partnerName={activeCompany?.partner_name || user?.partner_name}
           partnerLogoUrl={activeCompany?.partner_logo_url || user?.partner_logo_url}
           coBrandingMode={activeCompany?.co_branding_mode || user?.co_branding_mode}
+          onImportClick={() => setCurrentTab('roster-requests')}
           isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
           onReturnToSuperAdmin={() => setInspectedCompanyId(null)}
           onNavigateToComplaints={canViewGrievances ? () => setCurrentTab('complaints') : undefined}
@@ -724,11 +727,51 @@ export default function Home() {
             <InternalCommitteeView companyName={activeCompany?.name || 'Company'} />
           )}
 
-          {/* TAB 4: WHITE-LABEL BRANDING CUSTOMIZER */}
+          {/* TAB 4: WHITE-LABEL BRANDING CUSTOMIZER (RESTRICTED TO ADMIN / PARTNER) */}
           {currentTab === 'branding' && (
-            <BrandingCustomizerView
-              company={activeCompany}
-              onRefresh={() => loadDashboardData(selectedCompanyId)}
+            (isSuperAdmin || isPartnerAdmin || !!inspectedCompanyId) ? (
+              <BrandingCustomizerView
+                company={activeCompany}
+                onRefresh={() => loadDashboardData(selectedCompanyId)}
+              />
+            ) : (
+              <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-10 text-center space-y-4 max-w-lg mx-auto my-12 shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-xs">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Branding Customization Restricted</h3>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    Corporate logo uploads, theme colour schemes, and co-branding controls are strictly restricted to Platform Super Administrators and Partner Managers. Contact your account manager to update your company identity.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setCurrentTab('dashboard')}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Return to Dashboard
+                  </button>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* TAB: ROSTER UPLOAD & CLIENT REQUESTS (MERGED PAGE) */}
+          {currentTab === 'roster-requests' && (
+            <RosterAndRequestsView
+              companyId={selectedCompanyId || activeCompany?.id}
+              companyName={activeCompany?.name || 'Enterprise'}
+              onRefreshData={() => loadDashboardData(selectedCompanyId || activeCompany?.id)}
+            />
+          )}
+
+          {/* TAB: EMPLOYEE CREDITS & BILLING */}
+          {currentTab === 'billing' && (
+            <RosterAndRequestsView
+              companyId={selectedCompanyId || activeCompany?.id}
+              companyName={activeCompany?.name || 'Enterprise'}
+              onRefreshData={() => loadDashboardData(selectedCompanyId || activeCompany?.id)}
             />
           )}
 

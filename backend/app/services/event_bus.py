@@ -166,3 +166,4 @@ async def sse_event_generator(
     except asyncio.CancelledError:
         logger.info(f"SSE stream closed for user {user_id}")
         return
+

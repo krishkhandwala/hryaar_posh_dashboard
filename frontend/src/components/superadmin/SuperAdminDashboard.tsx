@@ -27,6 +27,11 @@ import {
   Palette,
   X,
   FileSpreadsheet,
+  Download,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
@@ -60,6 +65,10 @@ const TAB_META: Record<string, { title: string; subtitle: string }> = {
   subscriptions: {
     title: 'Commercial Plans',
     subtitle: 'Subscription tiers, seat thresholds, storage limits, and active plan distribution.',
+  },
+  requests: {
+    title: 'Client Service Requests & CSVs',
+    subtitle: 'Client-uploaded employee CSV rosters, onboarding requests, and corporate operational concerns.',
   },
   health: {
     title: 'System Health',
@@ -119,7 +128,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onLogout,
 }) => {
   const [currentTab, setCurrentTab] = useState<
-    'overview' | 'partners' | 'companies' | 'users' | 'subscriptions' | 'health' | 'audit'
+    'overview' | 'partners' | 'companies' | 'users' | 'subscriptions' | 'requests' | 'health' | 'audit'
   >('overview');
   const [analytics, setAnalytics] = useState<any>(null);
   const [companies, setCompanies] = useState<any[]>([]);
@@ -127,6 +136,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [plans, setPlans] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [clusterTelemetry, setClusterTelemetry] = useState<any>(null);
+  const [serviceRequests, setServiceRequests] = useState<any[]>([]);
+  const [selectedRequestForReview, setSelectedRequestForReview] = useState<any>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [autoIngestCsv, setAutoIngestCsv] = useState(true);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [requestFilter, setRequestFilter] = useState<'ALL' | 'CSV_UPLOAD' | 'EMPLOYEE_ADDITION' | 'CONCERN'>('ALL');
   const [asyncJobProgress, setAsyncJobProgress] = useState<number | null>(null);
   const [asyncJobResult, setAsyncJobResult] = useState<string | null>(null);
   const [isTriggeringJob, setIsTriggeringJob] = useState(false);
@@ -192,7 +207,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, compsRes, usersRes, plansRes, , logsRes, telemetryRes, billingRes, gwRes] = await Promise.all([
+      const [analyticsRes, compsRes, usersRes, plansRes, , logsRes, telemetryRes, billingRes, gwRes, reqsRes] = await Promise.all([
         apiClient.get('/super-admin/analytics'),
         apiClient.get('/super-admin/companies'),
         apiClient.get('/super-admin/users'),
@@ -202,6 +217,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         apiClient.get('/cluster/telemetry'),
         apiClient.get('/billing/summary').catch(() => ({ data: null })),
         fetch('/api/gateway-status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        apiClient.get('/super-admin/service-requests').catch(() => ({ data: [] })),
       ]);
 
       setAnalytics(analyticsRes.data);
@@ -212,6 +228,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setClusterTelemetry(telemetryRes.data);
       setBillingSummary(billingRes.data);
       setGatewayStatus(gwRes);
+      setServiceRequests(reqsRes.data || []);
     } catch (e) {
       console.error('Platform data fetch error:', e);
     } finally {
@@ -222,6 +239,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   useEffect(() => {
     loadAllData();
   }, []);
+
+  const handleReviewRequest = async (status: 'APPROVED' | 'REJECTED' | 'IN_REVIEW') => {
+    if (!selectedRequestForReview) return;
+    setReviewSubmitting(true);
+    try {
+      await apiClient.patch(`/super-admin/service-requests/${selectedRequestForReview.id}`, {
+        status,
+        admin_notes: reviewNotes,
+        auto_ingest: autoIngestCsv && selectedRequestForReview.request_type === 'CSV_UPLOAD',
+      });
+      setSelectedRequestForReview(null);
+      setReviewNotes('');
+      await loadAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to update request status');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const triggerClusterAsyncJob = async () => {
     try {
@@ -465,6 +501,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               { id: 'overview', label: 'Overview', icon: Activity },
               { id: 'partners', label: 'Partners', icon: Layers, count: partnerOrgs.length },
               { id: 'companies', label: 'Organisations', icon: Building2, count: companies.length },
+              { id: 'requests', label: 'Client CSVs & Requests', icon: FileSpreadsheet, count: serviceRequests.filter((r) => r.status === 'PENDING').length },
               { id: 'users', label: 'Users', icon: Users2, count: usersList.length },
               { id: 'subscriptions', label: 'Plans', icon: CreditCard },
               { id: 'health', label: 'System Health', icon: Server },
@@ -1535,6 +1572,188 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB: CLIENT SERVICE REQUESTS & CSVs */}
+          {currentTab === 'requests' && (
+            <div className="space-y-6">
+              {/* Stat Counters */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <div className="text-xs text-slate-500 font-medium">Pending Review</div>
+                  <div className="text-2xl font-bold text-amber-600 mt-1">
+                    {serviceRequests.filter((r) => r.status === 'PENDING').length}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Awaiting Super Admin action</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <div className="text-xs text-slate-500 font-medium">CSV Roster Submissions</div>
+                  <div className="text-2xl font-bold text-blue-600 mt-1">
+                    {serviceRequests.filter((r) => r.request_type === 'CSV_UPLOAD').length}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Bulk employee uploads</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <div className="text-xs text-slate-500 font-medium">Employee Additions</div>
+                  <div className="text-2xl font-bold text-indigo-600 mt-1">
+                    {serviceRequests.filter((r) => r.request_type === 'EMPLOYEE_ADDITION').length}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Manual seat additions</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <div className="text-xs text-slate-500 font-medium">Corporate Concerns</div>
+                  <div className="text-2xl font-bold text-slate-700 mt-1">
+                    {serviceRequests.filter((r) => r.request_type === 'CONCERN').length}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Statutory & operational tickets</div>
+                </div>
+              </div>
+
+              {/* Table with filtering */}
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {(['ALL', 'CSV_UPLOAD', 'EMPLOYEE_ADDITION', 'CONCERN'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => setRequestFilter(filter)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+                          requestFilter === filter
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {filter === 'ALL'
+                          ? 'All Submissions'
+                          : filter === 'CSV_UPLOAD'
+                          ? 'CSV Rosters'
+                          : filter === 'EMPLOYEE_ADDITION'
+                          ? 'Employee Additions'
+                          : 'Concerns'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={loadAllData}
+                    className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 rounded-lg flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-5">Organisation</th>
+                        <th className="py-2.5 px-4">Request Type</th>
+                        <th className="py-2.5 px-4">Details / CSV File</th>
+                        <th className="py-2.5 px-4">Submitted By</th>
+                        <th className="py-2.5 px-4">Status</th>
+                        <th className="py-2.5 px-5 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {serviceRequests
+                        .filter((r) => requestFilter === 'ALL' || r.request_type === requestFilter)
+                        .map((req) => (
+                          <tr key={req.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-5">
+                              <div className="font-medium text-slate-900">{req.company_name}</div>
+                              <div className="text-[11px] text-slate-400 font-mono">{req.company_id}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium ${
+                                  req.request_type === 'CSV_UPLOAD'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                    : req.request_type === 'EMPLOYEE_ADDITION'
+                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}
+                              >
+                                {req.request_type === 'CSV_UPLOAD'
+                                  ? 'CSV Roster'
+                                  : req.request_type === 'EMPLOYEE_ADDITION'
+                                  ? 'Employee Add'
+                                  : 'Client Concern'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-slate-900 truncate max-w-xs">{req.title}</div>
+                              {req.filename && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                  <span>{req.filename}</span>
+                                  {req.row_count && (
+                                    <span className="font-semibold text-slate-700">({req.row_count} employees)</span>
+                                  )}
+                                  {req.file_url && (
+                                    <a
+                                      href={req.file_url}
+                                      download
+                                      className="inline-flex items-center gap-0.5 text-blue-600 hover:underline font-medium ml-1"
+                                    >
+                                      <Download className="w-3 h-3" />
+                                      <span>CSV</span>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                              {req.description && (
+                                <p className="text-[11px] text-slate-500 truncate max-w-sm mt-0.5">
+                                  {req.description}
+                                </p>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-slate-800">{req.submitted_by_email || 'Client User'}</div>
+                              <div className="text-[10px] text-slate-400">
+                                {new Date(req.created_at).toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                                  req.status === 'APPROVED'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : req.status === 'REJECTED'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : req.status === 'IN_REVIEW'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                              >
+                                {req.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-5 text-right">
+                              <button
+                                onClick={() => {
+                                  setSelectedRequestForReview(req);
+                                  setReviewNotes(req.admin_notes || '');
+                                  setAutoIngestCsv(true);
+                                }}
+                                className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium cursor-pointer transition-colors"
+                              >
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      {serviceRequests.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            No client service requests or CSV uploads submitted yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -2026,6 +2245,124 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         companies={companies}
         onSuccess={loadAllData}
       />
+
+      {/* Modal 7: Review & Action Client Service Request */}
+      {selectedRequestForReview && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Review Client Request</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {selectedRequestForReview.company_name} ({selectedRequestForReview.company_id})
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedRequestForReview(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 text-xs">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Request Type:</span>
+                  <span className="font-semibold text-slate-800">{selectedRequestForReview.request_type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Title:</span>
+                  <span className="font-medium text-slate-900">{selectedRequestForReview.title}</span>
+                </div>
+                {selectedRequestForReview.row_count && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Employees in CSV:</span>
+                    <span className="font-bold text-blue-600">{selectedRequestForReview.row_count} employees</span>
+                  </div>
+                )}
+                {selectedRequestForReview.filename && (
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200">
+                    <span className="text-slate-500">Attached File:</span>
+                    <a
+                      href={selectedRequestForReview.file_url}
+                      download
+                      className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download {selectedRequestForReview.filename}</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {selectedRequestForReview.description && (
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Client Notes / Description</label>
+                  <p className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-700">
+                    {selectedRequestForReview.description}
+                  </p>
+                </div>
+              )}
+
+              {selectedRequestForReview.request_type === 'CSV_UPLOAD' && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="autoIngestCheckbox"
+                    checked={autoIngestCsv}
+                    onChange={(e) => setAutoIngestCsv(e.target.checked)}
+                    className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="autoIngestCheckbox" className="text-xs text-emerald-900 font-medium cursor-pointer">
+                    Automatically ingest and activate all employees from this CSV into company roster upon Approval
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Super Admin Feedback / Resolution Notes</label>
+                <textarea
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  placeholder="Notes explaining approval, verification, or rejection reasons..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => handleReviewRequest('REJECTED')}
+                disabled={reviewSubmitting}
+                className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg font-medium hover:bg-rose-100 cursor-pointer transition-colors"
+              >
+                Reject Request
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRequestForReview(null)}
+                  className="px-3.5 py-1.5 border border-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReviewRequest('APPROVED')}
+                  disabled={reviewSubmitting}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium cursor-pointer transition-colors"
+                >
+                  {reviewSubmitting ? 'Processing...' : 'Approve & Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SecuritySessionsModal
         isOpen={showSecurityModal}

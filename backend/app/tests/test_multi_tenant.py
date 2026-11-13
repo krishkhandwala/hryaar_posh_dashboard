@@ -137,13 +137,27 @@ def test_company_branding_customization_and_isolation():
     res_acme = client.post("/api/v1/auth/login", json={"email": "hr@acme.com", "password": "Acme@1234"})
     headers_acme = {"Authorization": f"Bearer {res_acme.json()['access_token']}"}
 
+    res_sa = client.post("/api/v1/auth/login", json={"email": "superadmin@hryaar.com", "password": "Admin@1234"})
+    headers_sa = {"Authorization": f"Bearer {res_sa.json()['access_token']}"}
+
     res_beta = client.post("/api/v1/auth/login", json={"email": "hr@beta.com", "password": "Beta@1234"})
     headers_beta = {"Authorization": f"Bearer {res_beta.json()['access_token']}"}
 
-    # Acme updates branding
-    update_res = client.put(
+    # Company admin is restricted and receives 403
+    forbidden_res = client.put(
         "/api/v1/company/branding",
         headers=headers_acme,
+        json={
+            "primary_color": "#1B365D",
+            "welcome_message": "Acme Updated Welcome Header"
+        }
+    )
+    assert forbidden_res.status_code == 403
+
+    # Super Admin / Partner Admin is authorized
+    update_res = client.put(
+        "/api/v1/company/branding",
+        headers=headers_sa,
         json={
             "primary_color": "#1B365D",
             "welcome_message": "Acme Updated Welcome Header"
@@ -208,21 +222,34 @@ def test_logo_file_upload_validation():
     res_acme = client.post("/api/v1/auth/login", json={"email": "hr@acme.com", "password": "Acme@1234"})
     headers_acme = {"Authorization": f"Bearer {res_acme.json()['access_token']}"}
 
-    # Upload valid image file
+    res_sa = client.post("/api/v1/auth/login", json={"email": "superadmin@hryaar.com", "password": "Admin@1234"})
+    headers_sa = {"Authorization": f"Bearer {res_sa.json()['access_token']}"}
+
     fake_png = io.BytesIO(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4")
-    upload_res = client.post(
+
+    # Company admin is restricted and receives 403
+    forbidden_res = client.post(
         "/api/v1/company/branding/logo",
         headers=headers_acme,
         files={"file": ("acme_logo.png", fake_png, "image/png")}
     )
+    assert forbidden_res.status_code == 403
+
+    # Upload valid image file as Super Admin
+    fake_png.seek(0)
+    upload_res = client.post(
+        "/api/v1/company/branding/logo",
+        headers=headers_sa,
+        files={"file": ("acme_logo.png", fake_png, "image/png")}
+    )
     assert upload_res.status_code == 200
-    assert "/static/uploads/brand_acme_" in upload_res.json()["logo_url"]
+    assert "/static/uploads/brand_" in upload_res.json()["logo_url"]
 
     # Reject non-image file
     fake_exe = io.BytesIO(b"MZ\x90\x00\x03\x00\x00\x00")
     bad_upload = client.post(
         "/api/v1/company/branding/logo",
-        headers=headers_acme,
+        headers=headers_sa,
         files={"file": ("malware.exe", fake_exe, "application/octet-stream")}
     )
     assert bad_upload.status_code == 400

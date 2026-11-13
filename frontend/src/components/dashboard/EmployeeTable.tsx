@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Search, Download, CheckCircle2, Clock, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Download, CheckCircle2, Clock, ShieldCheck, ShieldAlert, AlertTriangle, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface EmployeeTableProps {
@@ -35,15 +35,74 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
   departments,
 }) => {
   const [page, setPage] = useState(1);
+  const [assessmentFilter, setAssessmentFilter] = useState<'ALL' | 'FAILED' | 'PASSED' | 'PENDING'>('ALL');
+  const [scoreThreshold, setScoreThreshold] = useState<number>(70);
   const pageSize = 25;
+
+  // Compute counts
+  const failedCount = useMemo(() => {
+    return employees.filter(
+      (e) => e.assessment_status === 'FAILED' || (e.assessment_score !== null && e.assessment_score < scoreThreshold)
+    ).length;
+  }, [employees, scoreThreshold]);
+
+  const passedCount = useMemo(() => {
+    return employees.filter(
+      (e) => e.assessment_status === 'PASSED' || (e.assessment_score !== null && e.assessment_score >= scoreThreshold)
+    ).length;
+  }, [employees, scoreThreshold]);
+
+  const pendingCount = useMemo(() => {
+    return employees.filter(
+      (e) => !e.assessment_status || e.assessment_status === 'NOT_ATTEMPTED' || e.assessment_status === 'PENDING'
+    ).length;
+  }, [employees]);
+
+  // Filtered dataset
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      // 1. Search filter
+      const matchesSearch =
+        !searchTerm ||
+        emp.employee_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchTerm.toLowerCase());
+      if (!matchesSearch) return false;
+
+      // 2. Department filter
+      const matchesDept = selectedDept === 'ALL' || emp.department === selectedDept;
+      if (!matchesDept) return false;
+
+      // 3. Assessment status / score threshold filter
+      if (assessmentFilter === 'FAILED') {
+        const isFailed =
+          emp.assessment_status === 'FAILED' ||
+          (emp.assessment_score !== null && emp.assessment_score < scoreThreshold);
+        if (!isFailed) return false;
+      } else if (assessmentFilter === 'PASSED') {
+        const isPassed =
+          emp.assessment_status === 'PASSED' ||
+          (emp.assessment_score !== null && emp.assessment_score >= scoreThreshold);
+        if (!isPassed) return false;
+      } else if (assessmentFilter === 'PENDING') {
+        const isPending =
+          !emp.assessment_status ||
+          emp.assessment_status === 'NOT_ATTEMPTED' ||
+          emp.assessment_status === 'PENDING';
+        if (!isPending) return false;
+      }
+
+      return true;
+    });
+  }, [employees, searchTerm, selectedDept, assessmentFilter, scoreThreshold]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedDept, employees.length]);
+  }, [searchTerm, selectedDept, assessmentFilter, scoreThreshold]);
 
-  const totalPages = Math.max(1, Math.ceil(employees.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
   const startIndex = (page - 1) * pageSize;
-  const paginatedEmployees = employees.slice(startIndex, startIndex + pageSize);
+  const paginatedEmployees = filteredEmployees.slice(startIndex, startIndex + pageSize);
 
   const getTrainingBadge = (status: string, pct: number) => {
     if (status === 'COMPLETED') {
@@ -70,18 +129,19 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
   };
 
   const getAssessmentBadge = (status: string, score: number | null) => {
-    if (status === 'PASSED') {
+    if (status === 'PASSED' || (score !== null && score >= scoreThreshold)) {
       return (
         <span className="font-semibold text-xs text-emerald-700 flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>{score}% Passed</span>
+          <span>{score ?? 100}% Passed</span>
         </span>
       );
     }
-    if (status === 'FAILED') {
+    if (status === 'FAILED' || (score !== null && score < scoreThreshold)) {
       return (
-        <span className="font-semibold text-xs text-rose-600">
-          {score}% Needs Retest
+        <span className="font-semibold text-xs text-rose-600 flex items-center gap-1">
+          <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+          <span>{score ?? 0}% Needs Retest (&lt;{scoreThreshold}%)</span>
         </span>
       );
     }
@@ -95,21 +155,23 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
       origin: { y: 0.85 }
     });
 
-    const headers = ['Employee Code', 'Full Name', 'Corporate Email', 'Department', 'Module Progress', 'Assessment Score'];
-    const rows = employees.map(e => [
+    const headers = ['Employee Code', 'Full Name', 'Corporate Email', 'Department', 'Module Progress', 'Assessment Status', 'Assessment Score'];
+    const rows = filteredEmployees.map(e => [
       e.employee_code,
       `"${e.first_name} ${e.last_name}"`,
       e.email,
       e.department,
       `${e.training_progress_pct}%`,
-      e.assessment_score ? `${e.assessment_score}%` : 'N/A'
+      e.assessment_status || 'PENDING',
+      e.assessment_score !== null ? `${e.assessment_score}%` : 'N/A'
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `hryaar_posh_audit_roster_${new Date().toISOString().slice(0, 10)}.csv`);
+    const filterSuffix = assessmentFilter === 'FAILED' ? '_FAILED_RETEST_LIST' : '';
+    link.setAttribute('download', `hryaar_posh_audit_roster${filterSuffix}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -173,6 +235,77 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
         </div>
       </div>
 
+      {/* Benchmark Filter Tabs & Threshold Control */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button
+            onClick={() => setAssessmentFilter('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              assessmentFilter === 'ALL'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <span>All Employees ({employees.length})</span>
+          </button>
+
+          <button
+            onClick={() => setAssessmentFilter('FAILED')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assessmentFilter === 'FAILED'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : failedCount > 0
+                ? 'bg-rose-50 text-rose-700 border border-rose-200/80 hover:bg-rose-100'
+                : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Below Benchmark / Failed ({failedCount})</span>
+            {failedCount > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
+            )}
+          </button>
+
+          <button
+            onClick={() => setAssessmentFilter('PASSED')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assessmentFilter === 'PASSED'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60 hover:bg-emerald-100'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Certified ({passedCount})</span>
+          </button>
+
+          <button
+            onClick={() => setAssessmentFilter('PENDING')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              assessmentFilter === 'PENDING'
+                ? 'bg-slate-700 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <span>Pending Attempt ({pendingCount})</span>
+          </button>
+        </div>
+
+        {/* Threshold Selector */}
+        <div className="flex items-center gap-2 shrink-0 text-xs">
+          <span className="text-slate-500 font-medium">Benchmark Threshold:</span>
+          <select
+            value={scoreThreshold}
+            onChange={(e) => setScoreThreshold(Number(e.target.value))}
+            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden focus:border-blue-500 cursor-pointer"
+          >
+            <option value={70}>70% (PoSH Statutory)</option>
+            <option value={80}>80% (Advanced Tier)</option>
+            <option value={60}>60% (Minimum Compliance)</option>
+            <option value={50}>50% (Basic)</option>
+          </select>
+        </div>
+      </div>
+
       {/* Audit Table */}
       <div className="border border-slate-200/80 rounded-xl overflow-x-auto shadow-xs">
         <table className="w-full text-left text-xs">
@@ -187,30 +320,40 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {paginatedEmployees.length > 0 ? (
-              paginatedEmployees.map((emp) => (
-                <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3.5 px-4 font-mono font-semibold text-blue-700">
-                    {emp.employee_code}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <div className="font-semibold text-slate-900 leading-tight">
-                      {emp.first_name} {emp.last_name}
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
-                      {emp.email}
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-700 font-medium">
-                    {emp.department}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    {getTrainingBadge(emp.training_status, emp.training_progress_pct)}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    {getAssessmentBadge(emp.assessment_status, emp.assessment_score)}
-                  </td>
-                </tr>
-              ))
+              paginatedEmployees.map((emp) => {
+                const isEmpFailed =
+                  emp.assessment_status === 'FAILED' ||
+                  (emp.assessment_score !== null && emp.assessment_score < scoreThreshold);
+                return (
+                  <tr
+                    key={emp.id}
+                    className={`hover:bg-slate-50/80 transition-colors ${
+                      isEmpFailed ? 'bg-rose-50/40' : ''
+                    }`}
+                  >
+                    <td className="py-3.5 px-4 font-mono font-semibold text-blue-700">
+                      {emp.employee_code}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-slate-900 leading-tight">
+                        {emp.first_name} {emp.last_name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                        {emp.email}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-700 font-medium">
+                      {emp.department}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {getTrainingBadge(emp.training_status, emp.training_progress_pct)}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {getAssessmentBadge(emp.assessment_status, emp.assessment_score)}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-slate-400 font-medium text-sm">

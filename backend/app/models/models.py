@@ -475,3 +475,28 @@ class ClusterEvent(Base):
     payload_json = Column(Text, nullable=True)
     node_id = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ClientServiceRequest(Base):
+    """Client requests for employee additions, CSV roster uploads, and corporate concerns submitted to Super Admin."""
+    __tablename__ = "client_service_requests"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    company_id = Column(String, ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
+    submitted_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    request_type = Column(String(50), nullable=False, index=True) # CSV_ROSTER_UPLOAD, EMPLOYEE_ADDITION, CORPORATE_CONCERN, QUOTA_INCREASE
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(50), default="GENERAL") # ENROLLMENT, GRIEVANCE_ASSISTANCE, BILLING, STATUTORY_REPORTING, GENERAL
+    priority = Column(String(20), default="NORMAL") # NORMAL, HIGH, URGENT
+    file_url = Column(String(500), nullable=True)
+    filename = Column(String(255), nullable=True)
+    row_count = Column(Integer, default=0)
+    status = Column(String(50), default="PENDING", index=True) # PENDING, IN_REVIEW, APPROVED, COMPLETED, REJECTED
+    admin_notes = Column(Text, nullable=True)
+    payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    company = relationship("Company")
+    submitted_by = relationship("User")

@@ -145,6 +145,18 @@ def require_partner_admin(current_user: User = Depends(get_current_user)) -> Use
     return current_user
 
 
+def require_branding_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Restricts branding, logo, and color theme modifications strictly to Super Admin and Partner Admin."""
+    user_role = current_user.role if isinstance(current_user.role, str) else getattr(current_user.role, "code", "")
+    allowed_roles = ["SUPER_ADMIN", "PLATFORM_ADMIN", "PARTNER_ADMIN", "MIDDLEMAN_ADMIN"]
+    if user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Branding customization (logos, colors, and themes) is strictly restricted to Platform Administrators and Partner Managers."
+        )
+    return current_user
+
+
 def get_tenant_company_id(
     requested_company_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),

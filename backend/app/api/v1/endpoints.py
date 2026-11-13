@@ -484,6 +484,9 @@ def list_employees(
     search: Optional[str] = None,
     department: Optional[str] = None,
     training_status: Optional[str] = None,
+    assessment_status: Optional[str] = None,
+    score_below: Optional[float] = None,
+    score_above: Optional[float] = None,
     limit: int = Query(1500, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -504,6 +507,27 @@ def list_employees(
         query = query.filter(Employee.department == department)
     if training_status and training_status != "ALL":
         query = query.filter(Employee.training_status == training_status)
+
+    if assessment_status and assessment_status != "ALL":
+        if assessment_status == "FAILED":
+            query = query.filter(
+                (Employee.assessment_status == "FAILED") |
+                ((Employee.assessment_score.isnot(None)) & (Employee.assessment_score < 70.0))
+            )
+        elif assessment_status == "PASSED":
+            query = query.filter(Employee.assessment_status == "PASSED")
+        elif assessment_status == "NOT_ATTEMPTED":
+            query = query.filter(
+                (Employee.assessment_status == "NOT_ATTEMPTED") |
+                (Employee.assessment_status.is_(None))
+            )
+        else:
+            query = query.filter(Employee.assessment_status == assessment_status)
+
+    if score_below is not None:
+        query = query.filter((Employee.assessment_score.isnot(None)) & (Employee.assessment_score < score_below))
+    if score_above is not None:
+        query = query.filter((Employee.assessment_score.isnot(None)) & (Employee.assessment_score >= score_above))
 
     return query.order_by(Employee.employee_code.asc()).offset(offset).limit(limit).all()
 
