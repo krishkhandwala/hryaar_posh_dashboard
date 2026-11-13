@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.models import User, Company, Employee, AuditLog, Complaint
+from app.services.event_bus import publish_realtime_event
 from app.core.deps import get_current_user
 
 router = APIRouter()
@@ -294,6 +295,22 @@ def submit_learner_assessment(
 
     db.commit()
 
+    if passed and emp:
+        publish_realtime_event(
+            db=db,
+            event_type="ASSESSMENT_PASSED",
+            title="PoSH Certification Earned",
+            message=f"{emp.first_name} {emp.last_name} ({emp.employee_code}) passed PoSH statutory evaluation with {score}%.",
+            company_id=emp.company_id,
+            user_id=current_user.id,
+            payload={
+                "employee_code": emp.employee_code,
+                "certificate_id": cert_id,
+                "score": score,
+                "department": emp.department,
+            }
+        )
+
     return {
         "score": score,
         "passed": passed,
@@ -388,6 +405,20 @@ def file_confidential_grievance(
     )
     db.add(audit)
     db.commit()
+
+    publish_realtime_event(
+        db=db,
+        event_type="COMPLAINT_FILED",
+        title="Confidential Grievance Lodged",
+        message=f"Inquiry ticket {comp_number} submitted to Internal Committee.",
+        company_id=company_id,
+        user_id=current_user.id,
+        payload={
+            "ticket_number": comp_number,
+            "department": dept,
+            "status": "FILED"
+        }
+    )
 
     return {
         "status": "success",

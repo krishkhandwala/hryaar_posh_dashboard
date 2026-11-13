@@ -61,6 +61,18 @@ async function handleProxy(
       respHeaders.set('X-Load-Balancer', 'HRYAAR-LeastConn-Gateway');
       respHeaders.set('X-Upstream-Target', upstream.url);
 
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream')) {
+        respHeaders.set('Cache-Control', 'no-cache, no-transform');
+        respHeaders.set('Connection', 'keep-alive');
+        respHeaders.set('X-Accel-Buffering', 'no');
+        return new NextResponse(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: respHeaders,
+        });
+      }
+
       const respBody = await res.arrayBuffer();
       return new NextResponse(respBody, {
         status: res.status,

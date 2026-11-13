@@ -32,6 +32,7 @@ import { apiClient } from '@/lib/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { ImportModal } from '@/components/modals/ImportModal';
 import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
+import { useRealtime } from '@/lib/realtime';
 
 interface SuperAdminDashboardProps {
   user: any;
@@ -157,6 +158,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [billingSummary, setBillingSummary] = useState<any>(null);
   const [gatewayStatus, setGatewayStatus] = useState<any>(null);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const { subscribeToEvent } = useRealtime();
+
+  useEffect(() => {
+    const unsub = subscribeToEvent('*', () => {
+      loadAllData();
+    });
+    return () => unsub();
+  }, [subscribeToEvent]);
 
   // New Company Form State
   const [newCompName, setNewCompName] = useState('');

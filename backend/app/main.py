@@ -17,6 +17,7 @@ from app.api.v1.cluster import router as cluster_router, publish_node_heartbeat
 from app.api.v1.partner import router as partner_router
 from app.api.v1.learner import router as learner_router
 from app.api.v1.billing import router as billing_router
+from app.api.v1.realtime import router as realtime_router
 from app.db.seed import init_db
 from app.db.migrate import run_migrations
 
@@ -63,6 +64,7 @@ app.include_router(training_router, prefix=f"{settings.API_V1_STR}/training", ta
 app.include_router(learner_router, prefix=f"{settings.API_V1_STR}/learner", tags=["Employee Learner Portal & Curriculum"])
 app.include_router(billing_router, prefix=f"{settings.API_V1_STR}/billing", tags=["Billing, Checkout & Invoices"])
 app.include_router(cluster_router, prefix=f"{settings.API_V1_STR}/cluster", tags=["3-Tier Distributed Architecture & Telemetry"])
+app.include_router(realtime_router, prefix=f"{settings.API_V1_STR}/realtime", tags=["Real-time Cluster Events & SSE Stream"])
 app.include_router(api_router, prefix=f"{settings.API_V1_STR}", tags=["Multi-Tenant PoSH Dashboard"])
 
 @app.get("/health")

@@ -39,6 +39,7 @@ import {
   Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRealtime } from '@/lib/realtime';
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -85,6 +86,24 @@ export default function Home() {
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+
+  const { subscribeToEvent } = useRealtime();
+
+  // Real-time automatic background refresh on cluster events
+  useEffect(() => {
+    const compId = selectedCompanyId || user?.company_id;
+    if (!compId) return;
+
+    const unsub = subscribeToEvent('*', (ev) => {
+      if (!ev.company_id || ev.company_id === compId) {
+        loadDashboardData(compId);
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [selectedCompanyId, user?.company_id, subscribeToEvent]);
 
   // Restore session
   useEffect(() => {

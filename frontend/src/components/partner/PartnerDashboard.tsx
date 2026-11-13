@@ -28,6 +28,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
+import { useRealtime } from '@/lib/realtime';
 
 interface PartnerDashboardProps {
   user: any;
@@ -129,6 +130,18 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
       setLoading(false);
     }
   };
+
+  const { subscribeToEvent } = useRealtime();
+
+  useEffect(() => {
+    fetchPartnerData();
+
+    const unsub = subscribeToEvent('*', () => {
+      fetchPartnerData();
+    });
+
+    return () => unsub();
+  }, [subscribeToEvent]);
 
   const handlePartnerCheckout = async (planId?: string, seatsToAdd: number = 0) => {
     setCheckoutLoading(true);

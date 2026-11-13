@@ -143,6 +143,21 @@ class DistributedTaskManager:
                     snap = None
             if snap:
                 self._persist_upsert(snap)
+                try:
+                    from app.db.session import SessionLocal
+                    from app.services.event_bus import publish_realtime_event
+                    with SessionLocal() as edb:
+                        publish_realtime_event(
+                            db=edb,
+                            event_type="BATCH_JOB_COMPLETED",
+                            title="Cluster Task Finished",
+                            message=f"Job {job_id} ({snap.get('job_type')}) processed successfully.",
+                            company_id=snap.get("company_id"),
+                            user_id=snap.get("user_id"),
+                            payload={"job_id": job_id, "job_type": snap.get("job_type")}
+                        )
+                except Exception:
+                    pass
         except Exception as e:
             with self._lock:
                 if job_id in self._jobs:
@@ -155,6 +170,21 @@ class DistributedTaskManager:
                     snap = None
             if snap:
                 self._persist_upsert(snap)
+                try:
+                    from app.db.session import SessionLocal
+                    from app.services.event_bus import publish_realtime_event
+                    with SessionLocal() as edb:
+                        publish_realtime_event(
+                            db=edb,
+                            event_type="BATCH_JOB_COMPLETED",
+                            title="Cluster Task Finished",
+                            message=f"Job {job_id} ({snap.get('job_type')}) processed successfully.",
+                            company_id=snap.get("company_id"),
+                            user_id=snap.get("user_id"),
+                            payload={"job_id": job_id, "job_type": snap.get("job_type")}
+                        )
+                except Exception:
+                    pass
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         try:

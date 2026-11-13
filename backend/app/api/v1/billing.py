@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.deps import get_current_user, get_tenant_company_id
 from app.core.permissions import user_has_permission
 from app.db.session import get_db
+from app.services.event_bus import publish_realtime_event
 from app.models.models import (
     AuditLog,
     Company,
@@ -103,6 +104,20 @@ def _fulfill_transaction(tx: PaymentTransaction, payment_id: str, db: Session, a
     )
     db.commit()
     db.refresh(tx)
+
+    publish_realtime_event(
+        db=db,
+        event_type="INVOICE_PAID",
+        title="Payment & Invoice Verified",
+        message=f"Invoice {tx.invoice_number} paid ({tx.currency} {tx.amount_cents / 100:.2f}). {tx.seats_purchased or 0} seats provisioned.",
+        company_id=tx.company_id,
+        payload={
+            "invoice_number": tx.invoice_number,
+            "order_id": tx.order_id,
+            "amount": tx.amount_cents / 100,
+            "seats_purchased": tx.seats_purchased
+        }
+    )
 
 
 @router.get("/plans")
@@ -361,6 +376,20 @@ def create_payment_checkout(
     db.add(tx)
     db.commit()
     db.refresh(tx)
+
+    publish_realtime_event(
+        db=db,
+        event_type="INVOICE_PAID",
+        title="Payment & Invoice Verified",
+        message=f"Invoice {tx.invoice_number} paid ({tx.currency} {tx.amount_cents / 100:.2f}). {tx.seats_purchased or 0} seats provisioned.",
+        company_id=tx.company_id,
+        payload={
+            "invoice_number": tx.invoice_number,
+            "order_id": tx.order_id,
+            "amount": tx.amount_cents / 100,
+            "seats_purchased": tx.seats_purchased
+        }
+    )
 
     sandbox_payment_id = f"pay_sandbox_{uuid.uuid4().hex[:12]}" if gateway_mode == "SANDBOX" else None
     sandbox_signature = _compute_sandbox_signature(order_id, sandbox_payment_id) if sandbox_payment_id else None

@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     AssessmentBandStat, ProgramStage, WebinarOut, ComplianceDocOut, RecentActivityOut
 )
 from app.services.csv_service import CSVImportService
+from app.services.event_bus import publish_realtime_event
 
 router = APIRouter()
 
@@ -577,4 +578,18 @@ async def import_csv_data(
         db=db,
         user_email=current_user.email
     )
+    if res and res.get("status") == "COMPLETED":
+        publish_realtime_event(
+            db=db,
+            event_type="CSV_ROSTER_IMPORTED",
+            title="Employee Roster Imported",
+            message=f"Imported {res.get('imported_rows', 0)} employees from {file.filename}.",
+            company_id=tenant_id,
+            user_id=current_user.id,
+            payload={
+                "filename": file.filename,
+                "imported_rows": res.get("imported_rows", 0),
+                "total_rows": res.get("total_rows", 0)
+            }
+        )
     return res

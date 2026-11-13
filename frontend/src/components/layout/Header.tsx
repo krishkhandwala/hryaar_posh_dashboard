@@ -9,10 +9,15 @@ import {
   ShieldAlert,
   ShieldCheck,
   CheckCircle2,
-  X
+  AlertTriangle,
+  RefreshCw,
+  Radio,
+  X,
+  Trash2
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
+import { useRealtime } from '@/lib/realtime';
 
 interface HeaderProps {
   userName: string;
@@ -45,6 +50,8 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const { isConnected, isConnecting, events, unreadCount, markAllRead, clearNotifications } = useRealtime();
+
   const isWhiteLabel = Boolean(partnerName && coBrandingMode === 'WHITE_LABEL');
   const isCoBranded = Boolean(partnerName && coBrandingMode === 'CO_BRANDED');
   const displayName = isWhiteLabel ? (partnerName || companyName) : companyName;
@@ -109,6 +116,29 @@ export const Header: React.FC<HeaderProps> = ({
           <Calendar className="w-3.5 h-3.5 text-slate-500" />
           <span>CY 2025–2026 Mandate</span>
         </div>
+
+        {/* Real-Time SSE Status Pill */}
+        <div
+          className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            isConnected
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : isConnecting
+              ? 'bg-amber-50 text-amber-800 border-amber-200'
+              : 'bg-slate-100 text-slate-600 border-slate-200'
+          }`}
+          title={isConnected ? 'Real-Time Server-Sent Events sync connected' : 'Connecting to cluster event stream...'}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isConnected
+                ? 'bg-emerald-500 animate-pulse'
+                : isConnecting
+                ? 'bg-amber-500 animate-ping'
+                : 'bg-slate-400'
+            }`}
+          />
+          <span>{isConnected ? 'Live Sync Active' : isConnecting ? 'Connecting...' : 'Sync Offline'}</span>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -149,42 +179,102 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             type="button"
-            onClick={() => setShowNotifications((prev) => !prev)}
+            onClick={() => {
+              setShowNotifications((prev) => !prev);
+              if (!showNotifications) markAllRead();
+            }}
             className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200/80 transition-colors cursor-pointer relative"
             aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600" />
+            {unreadCount > 0 ? (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            ) : isConnected ? (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500" />
+            ) : null}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-50 space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="font-bold text-slate-900">Compliance Notifications</span>
-                <button
-                  type="button"
-                  onClick={() => setShowNotifications(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+            <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 z-50 space-y-3 text-xs max-h-[480px] flex flex-col">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 text-sm">Cluster Notifications</span>
+                  {events.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-[10px]">
+                      {events.length}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {events.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearNotifications}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                      title="Clear notifications"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotifications(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-slate-900">CY 2025–2026 PoSH Mandate Active</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">
-                      Webinar reminders (7-day &amp; 2-day) are armed for enrolled employees.
-                    </div>
+
+              <div className="overflow-y-auto space-y-2 pr-1 flex-1">
+                {events.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <Radio className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+                    <p className="font-medium text-xs">No notifications yet</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Live events from the cluster will stream here.</p>
                   </div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <div className="font-semibold text-slate-800">Multi-Tenant Isolation Active</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    All audit events and roster records are scoped to {companyName}.
-                  </div>
-                </div>
+                ) : (
+                  events.slice(0, 15).map((ev) => {
+                    const isCert = ev.type === 'ASSESSMENT_PASSED' || ev.type === 'INVOICE_PAID';
+                    const isAlert = ev.type.includes('COMPLAINT');
+                    const isSync = ev.type.includes('CSV') || ev.type.includes('LMS');
+
+                    return (
+                      <div
+                        key={ev.id || ev.event_id}
+                        className={`p-3 rounded-xl border transition-all ${
+                          isCert
+                            ? 'bg-emerald-50/60 border-emerald-200/70 text-emerald-950'
+                            : isAlert
+                            ? 'bg-amber-50/60 border-amber-200/70 text-amber-950'
+                            : isSync
+                            ? 'bg-indigo-50/60 border-indigo-200/70 text-indigo-950'
+                            : 'bg-slate-50 border-slate-200/70 text-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className="shrink-0 mt-0.5">
+                            {isCert && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                            {isAlert && <AlertTriangle className="w-4 h-4 text-amber-600" />}
+                            {isSync && <RefreshCw className="w-4 h-4 text-indigo-600" />}
+                            {!isCert && !isAlert && !isSync && <Radio className="w-4 h-4 text-blue-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-semibold text-xs truncate">{ev.title}</span>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">{ev.message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

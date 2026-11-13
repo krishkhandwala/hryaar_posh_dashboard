@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import "./globals.css";
+import { RealtimeProvider } from "@/lib/realtime";
 
 export const metadata: Metadata = {
   title: "HRYAAR Digi-PoSH | Enterprise Compliance Operating System",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <RealtimeProvider>
+          {children}
+        </RealtimeProvider>
       </body>
     </html>
   );

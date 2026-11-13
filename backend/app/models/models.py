@@ -459,3 +459,19 @@ class ClusterJob(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+
+
+class ClusterEvent(Base):
+    """Cluster-wide persistent event bus for real-time SSE stream across all nodes and multi-tenant workspaces."""
+    __tablename__ = "cluster_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(String(64), default=generate_uuid, index=True)
+    event_type = Column(String(80), nullable=False, index=True) # COMPLAINT_FILED, COMPLAINT_UPDATED, ASSESSMENT_PASSED, CSV_ROSTER_IMPORTED, LMS_SYNC_COMPLETED, INVOICE_PAID, BATCH_JOB_COMPLETED, SYSTEM_BROADCAST
+    company_id = Column(String, nullable=True, index=True)
+    user_id = Column(String, nullable=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    payload_json = Column(Text, nullable=True)
+    node_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
