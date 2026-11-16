@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     def assemble_db_connection(cls, v: str) -> str:
         if isinstance(v, str):
-            v = v.strip()
+            v = v.strip().strip('"\'').strip()
             if v.startswith("postgres://"):
                 v = v.replace("postgres://", "postgresql+psycopg://", 1)
             elif v.startswith("postgresql://") and not v.startswith("postgresql+psycopg://"):
