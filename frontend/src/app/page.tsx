@@ -134,7 +134,7 @@ export default function Home() {
       const savedToken = localStorage.getItem('posh_token');
       if (savedToken) {
         setToken(savedToken);
-        fetchUserData();
+        fetchUserData(savedToken);
       }
     } catch {}
   }, []);
@@ -207,9 +207,14 @@ export default function Home() {
     setInspectedCompanyId(null);
   };
 
-  const fetchUserData = async () => {
+  const fetchUserData = async (tokenOverride?: string) => {
     try {
-      const res = await apiClient.get('/auth/me');
+      const activeToken = tokenOverride || (typeof window !== 'undefined' ? localStorage.getItem('posh_token') : null);
+      if (!activeToken) return;
+
+      const res = await apiClient.get('/auth/me', {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
       setUser(res.data);
       if (res.data?.workspace === 'IC_WORKSPACE' || res.data?.role === 'IC_MEMBER') {
         setCurrentTab('complaints');
@@ -227,8 +232,15 @@ export default function Home() {
         setSelectedCompanyId(res.data.company_id);
         loadDashboardData(res.data.company_id);
       }
-    } catch (err) {
-      handleLogout();
+    } catch (err: any) {
+      console.warn('Session verification error:', err);
+      if (err?.response?.status === 401) {
+        try {
+          localStorage.removeItem('posh_token');
+        } catch {}
+        setToken(null);
+        setUser(null);
+      }
     }
   };
 
