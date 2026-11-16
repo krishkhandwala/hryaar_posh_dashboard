@@ -62,7 +62,7 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [showDemoDrawer, setShowDemoDrawer] = useState(false);
+  const [showDemoDrawer, setShowDemoDrawer] = useState(true);
 
   // Dashboard Data State
   const [kpis, setKpis] = useState({
@@ -118,8 +118,15 @@ export default function Home() {
 
   const handleLogin = async (e?: React.FormEvent, directEmail?: string, directPassword?: string) => {
     if (e) e.preventDefault();
-    const emailToUse = directEmail || loginEmail;
-    const passwordToUse = directPassword || loginPassword;
+    const rawEmail = directEmail || loginEmail || '';
+    const rawPassword = directPassword || loginPassword || '';
+    const emailToUse = rawEmail.trim().toLowerCase();
+    const passwordToUse = rawPassword.trim();
+
+    if (!emailToUse || !passwordToUse) {
+      setLoginError('Please enter your authorized corporate email and password.');
+      return;
+    }
 
     setLoginLoading(true);
     setLoginError(null);
@@ -309,6 +316,12 @@ export default function Home() {
 
             <button
               type="submit"
+              onClick={(e) => {
+                if (!loginLoading) {
+                  e.preventDefault();
+                  handleLogin();
+                }
+              }}
               disabled={loginLoading}
               className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
             >

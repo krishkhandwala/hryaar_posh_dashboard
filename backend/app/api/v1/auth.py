@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError, jwt
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.models import User, Company, AuditLog, Employee, UserSession
@@ -27,6 +28,7 @@ AUTH_LOCKOUT_WINDOW_SECONDS = 900  # 15 minutes
 @router.post("/login", response_model=Token)
 def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)):
     normalized_email = login_data.email.strip().lower()
+    clean_password = login_data.password.strip()
     lock_key = f"auth_lock:{normalized_email}"
     fail_key = f"auth_fail:{normalized_email}"
 
@@ -37,26 +39,26 @@ def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)
             headers={"Retry-After": str(AUTH_LOCKOUT_WINDOW_SECONDS)},
         )
 
-    # 1. Look up authenticated user by email
-    user = db.query(User).filter(User.email == login_data.email).first()
+    # 1. Look up authenticated user by email (case-insensitive & trimmed)
+    user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
 
     # 2. First-time employee onboarding via Employee email or employee_code
     emp = None
     if not user:
         emp = db.query(Employee).filter(
-            (Employee.email == login_data.email) | (Employee.employee_code == login_data.email)
+            (func.lower(Employee.email) == normalized_email) | (func.lower(Employee.employee_code) == normalized_email)
         ).first()
 
         if emp:
             # Allow initial learner self-onboarding with company onboarding passcodes
             onboarding_passwords = ["Employee@1234", "Posh@1234"]
-            if login_data.password in onboarding_passwords:
-                user = db.query(User).filter(User.email == emp.email).first()
+            if clean_password in onboarding_passwords:
+                user = db.query(User).filter(func.lower(User.email) == emp.email.lower()).first()
                 if not user:
                     user = User(
-                        email=emp.email,
+                        email=emp.email.lower(),
                         full_name=f"{emp.first_name} {emp.last_name}",
-                        hashed_password=get_password_hash(login_data.password),
+                        hashed_password=get_password_hash(clean_password),
                         role="EMPLOYEE",
                         company_id=emp.company_id,
                         designation=emp.designation or "Employee / Learner",
@@ -67,14 +69,14 @@ def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)
                     db.commit()
                     db.refresh(user)
 
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if not user or not verify_password(clean_password, user.hashed_password):
         attempts = distributed_cache.incr_window(fail_key, AUTH_LOCKOUT_WINDOW_SECONDS)
         if attempts >= AUTH_LOCKOUT_MAX_ATTEMPTS:
             distributed_cache.set(lock_key, True, ttl_seconds=AUTH_LOCKOUT_WINDOW_SECONDS)
             db.add(AuditLog(
                 company_id=user.company_id if user else None,
                 actor_user_id=user.id if user else None,
-                user_email=login_data.email,
+                user_email=normalized_email,
                 action="AUTH_ACCOUNT_LOCKED",
                 ip_address=_resolve_client_ip(request),
                 details=f"Account temporarily locked across cluster after {attempts} failed login attempts.",
