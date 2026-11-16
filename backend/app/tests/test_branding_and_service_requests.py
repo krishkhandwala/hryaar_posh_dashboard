@@ -142,3 +142,4 @@ def test_service_requests_csv_upload_and_super_admin_view():
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["new_status"] == "APPROVED"
+
