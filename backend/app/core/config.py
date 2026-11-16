@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 from typing import Optional, List
 
 class Settings(BaseSettings):
@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 30
     DB_POOL_RECYCLE: int = 1800
     DB_POOL_TIMEOUT: int = 30
+
+    @field_validator("DATABASE_URL", mode="before")
+    def assemble_db_connection(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+psycopg://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+psycopg://"):
+                v = v.replace("postgresql://", "postgresql+psycopg://", 1)
+        return v
     
     # Tier 2 & Tier 3 Distributed Systems Configuration
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
