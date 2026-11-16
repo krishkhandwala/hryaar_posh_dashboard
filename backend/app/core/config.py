@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: str) -> str:
         if isinstance(v, str):
             v = v.strip().strip('"\'').strip()
+            # If accidentally prefixed with https:// or http://
+            if v.startswith("https://postgresql://") or v.startswith("http://postgresql://"):
+                v = v.replace("https://", "").replace("http://", "")
+            elif v.startswith("https://postgres://") or v.startswith("http://postgres://"):
+                v = v.replace("https://", "").replace("http://", "")
+
             if v.startswith("postgres://"):
                 v = v.replace("postgres://", "postgresql+psycopg://", 1)
             elif v.startswith("postgresql://") and not v.startswith("postgresql+psycopg://"):
