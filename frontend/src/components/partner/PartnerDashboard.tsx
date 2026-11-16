@@ -108,22 +108,26 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
     setLoading(true);
     try {
       const [overviewRes, clientsRes, plansRes, billSumRes] = await Promise.all([
-        apiClient.get('/partner/overview'),
-        apiClient.get('/partner/clients'),
+        apiClient.get('/partner/overview').catch(() => ({ data: null })),
+        apiClient.get('/partner/clients').catch(() => ({ data: [] })),
         apiClient.get('/billing/plans').catch(() => ({ data: { plans: [], gateways: null } })),
         apiClient.get('/billing/summary').catch(() => ({ data: null })),
       ]);
-      setPortfolio(overviewRes.data);
-      setClients(clientsRes.data);
-      setBillingPlans(plansRes.data.plans || []);
-      setBillingGateways(plansRes.data.gateways || null);
-      setBillingSummary(billSumRes.data);
+      if (overviewRes?.data) setPortfolio(overviewRes.data);
+      if (clientsRes?.data) setClients(clientsRes.data);
+      if (plansRes?.data) {
+        setBillingPlans(plansRes.data.plans || []);
+        setBillingGateways(plansRes.data.gateways || null);
+      }
+      if (billSumRes?.data) setBillingSummary(billSumRes.data);
 
-      setPartnerLogoUrl(overviewRes.data.partner_logo_url || '');
-      setPartnerPrimaryColor(overviewRes.data.primary_color || '#2A62FF');
-      setPartnerSidebarColor(overviewRes.data.sidebar_color || '#061122');
-      setPartnerAccentColor(overviewRes.data.accent_color || '#F59E0B');
-      setCoBrandingMode(overviewRes.data.co_branding_mode || 'CO_BRANDED');
+      if (overviewRes?.data) {
+        setPartnerLogoUrl(overviewRes.data.partner_logo_url || '');
+        setPartnerPrimaryColor(overviewRes.data.primary_color || '#2A62FF');
+        setPartnerSidebarColor(overviewRes.data.sidebar_color || '#061122');
+        setPartnerAccentColor(overviewRes.data.accent_color || '#F59E0B');
+        setCoBrandingMode(overviewRes.data.co_branding_mode || 'CO_BRANDED');
+      }
     } catch (err) {
       console.error('Failed to load partner portfolio:', err);
     } finally {

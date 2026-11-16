@@ -208,27 +208,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setLoading(true);
     try {
       const [analyticsRes, compsRes, usersRes, plansRes, , logsRes, telemetryRes, billingRes, gwRes, reqsRes] = await Promise.all([
-        apiClient.get('/super-admin/analytics'),
-        apiClient.get('/super-admin/companies'),
-        apiClient.get('/super-admin/users'),
-        apiClient.get('/super-admin/subscriptions'),
-        apiClient.get('/super-admin/system-health'),
-        apiClient.get('/super-admin/audit-logs'),
-        apiClient.get('/cluster/telemetry'),
+        apiClient.get('/super-admin/analytics').catch(() => ({ data: null })),
+        apiClient.get('/super-admin/companies').catch(() => ({ data: [] })),
+        apiClient.get('/super-admin/users').catch(() => ({ data: [] })),
+        apiClient.get('/super-admin/subscriptions').catch(() => ({ data: [] })),
+        apiClient.get('/super-admin/system-health').catch(() => ({ data: null })),
+        apiClient.get('/super-admin/audit-logs').catch(() => ({ data: [] })),
+        apiClient.get('/cluster/telemetry').catch(() => ({ data: null })),
         apiClient.get('/billing/summary').catch(() => ({ data: null })),
         fetch('/api/gateway-status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiClient.get('/super-admin/service-requests').catch(() => ({ data: [] })),
       ]);
 
-      setAnalytics(analyticsRes.data);
-      setCompanies(compsRes.data);
-      setUsersList(usersRes.data);
-      setPlans(plansRes.data);
-      setAuditLogs(logsRes.data);
-      setClusterTelemetry(telemetryRes.data);
-      setBillingSummary(billingRes.data);
+      if (analyticsRes?.data) setAnalytics(analyticsRes.data);
+      if (compsRes?.data) setCompanies(compsRes.data);
+      if (usersRes?.data) setUsersList(usersRes.data);
+      if (plansRes?.data) setPlans(plansRes.data);
+      if (logsRes?.data) setAuditLogs(logsRes.data);
+      if (telemetryRes?.data) setClusterTelemetry(telemetryRes.data);
+      if (billingRes?.data) setBillingSummary(billingRes.data);
       setGatewayStatus(gwRes);
-      setServiceRequests(reqsRes.data || []);
+      setServiceRequests(reqsRes?.data || []);
     } catch (e) {
       console.error('Platform data fetch error:', e);
     } finally {
