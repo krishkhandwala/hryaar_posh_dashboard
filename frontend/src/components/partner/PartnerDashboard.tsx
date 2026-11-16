@@ -361,12 +361,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
     }
   };
 
-  const filteredClients = clients.filter(
-    (c) =>
-      c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      c.slug.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      (c.industry && c.industry.toLowerCase().includes(clientSearch.toLowerCase()))
-  );
+  const filteredClients = (clients || []).filter((c) => {
+    const name = (c?.name || '').toLowerCase();
+    const slug = (c?.slug || '').toLowerCase();
+    const ind = (c?.industry || '').toLowerCase();
+    const search = clientSearch.toLowerCase();
+    return name.includes(search) || slug.includes(search) || ind.includes(search);
+  });
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans select-none">

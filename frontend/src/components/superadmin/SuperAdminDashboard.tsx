@@ -450,20 +450,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setIsCreateUserOpen(true);
   };
 
-  const filteredCompanies = companies.filter((c) => {
+  const filteredCompanies = (companies || []).filter((c) => {
+    const name = (c?.name || '').toLowerCase();
+    const slug = (c?.slug || '').toLowerCase();
     const matchesSearch =
-      c.name.toLowerCase().includes(companySearch.toLowerCase()) ||
-      c.slug.toLowerCase().includes(companySearch.toLowerCase());
-    const matchesStatus = companyStatusFilter === 'ALL' || c.status === companyStatusFilter;
+      name.includes(companySearch.toLowerCase()) ||
+      slug.includes(companySearch.toLowerCase());
+    const matchesStatus = companyStatusFilter === 'ALL' || c?.status === companyStatusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const filteredUsers = usersList.filter((u) => {
-    return (
-      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.company_name && u.company_name.toLowerCase().includes(userSearch.toLowerCase()))
-    );
+  const filteredUsers = (usersList || []).filter((u) => {
+    const email = (u?.email || '').toLowerCase();
+    const fullName = (u?.full_name || '').toLowerCase();
+    const compName = (u?.company_name || '').toLowerCase();
+    const search = userSearch.toLowerCase();
+    return email.includes(search) || fullName.includes(search) || compName.includes(search);
   });
 
   const partnerOrgs = companies.filter((c) => c.company_type === 'PARTNER');
