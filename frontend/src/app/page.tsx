@@ -113,9 +113,24 @@ export default function Home() {
     setMounted(true);
   }, []);
 
-  // Restore session
+  // Restore session or auto-login via demo query parameter
   useEffect(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const demo = params.get('demo');
+        if (demo === 'superadmin' || demo === 'admin') {
+          handleLogin(undefined, 'superadmin@hryaar.com', 'Admin@1234');
+          return;
+        } else if (demo === 'hr' || demo === 'acme') {
+          handleLogin(undefined, 'hr@acme.com', 'Acme@1234');
+          return;
+        } else if (demo === 'partner') {
+          handleLogin(undefined, 'partner@talentpro.com', 'Partner@1234');
+          return;
+        }
+      }
+
       const savedToken = localStorage.getItem('posh_token');
       if (savedToken) {
         setToken(savedToken);
@@ -175,7 +190,7 @@ export default function Home() {
         loadDashboardData(loggedUser.company_id);
       }
     } catch (err: any) {
-      setLoginError(err.response?.data?.detail || 'Invalid corporate credentials');
+      setLoginError(err.response?.data?.detail || err.message || 'Invalid corporate credentials');
     } finally {
       setLoginLoading(false);
     }
@@ -275,20 +290,6 @@ export default function Home() {
   });
 
   const departmentList = Array.from(new Set(employees.map((e) => e?.department))).filter(Boolean);
-
-  // ==========================================
-  // VIEW 0: HYDRATION MOUNT GUARD
-  // ==========================================
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-[#061122] flex flex-col justify-center items-center p-6 select-none relative overflow-hidden">
-        <div className="max-w-md w-full bg-[#0A192F]/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-9 shadow-2xl relative z-10 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
-          <span className="text-xs text-slate-400 font-medium">Initializing secure gateway...</span>
-        </div>
-      </div>
-    );
-  }
 
   // ==========================================
   // VIEW 1: ENTERPRISE AUTHENTICATION GATEWAY
