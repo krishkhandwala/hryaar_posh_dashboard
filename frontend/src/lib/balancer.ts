@@ -14,10 +14,13 @@ interface BalancerRegistry {
 const g = globalThis as unknown as { __hryaarLb?: BalancerRegistry };
 
 export function getBalancerRegistry(): BalancerRegistry {
+  const isVercel = !!process.env.VERCEL;
   const raw =
     process.env.BACKEND_UPSTREAMS ||
     process.env.BACKEND_INTERNAL_URL ||
-    'http://127.0.0.1:8001,http://127.0.0.1:8002';
+    (isVercel
+      ? 'https://hryaar-posh-dashboard.onrender.com'
+      : 'http://127.0.0.1:8001,http://127.0.0.1:8002');
 
   const urls = raw
     .split(',')
