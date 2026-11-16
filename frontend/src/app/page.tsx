@@ -326,8 +326,7 @@ export default function Home() {
             </button>
           </form>
 
-          {/* Development Workspace Quick Login Switcher */}
-          {process.env.NODE_ENV !== 'production' && (
+          {/* Quick Login Switcher for Prototype Evaluation */}
           <div className="mt-7 pt-5 border-t border-slate-800">
             <button
               type="button"
@@ -523,7 +522,6 @@ export default function Home() {
               )}
             </AnimatePresence>
           </div>
-          )}
         </div>
       </div>
     );
@@ -534,11 +532,18 @@ export default function Home() {
   // ==========================================
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#061122] flex items-center justify-center text-white text-xs font-semibold">
+      <div className="min-h-screen bg-[#061122] flex flex-col items-center justify-center text-white text-xs font-semibold gap-4">
         <div className="flex items-center gap-3">
           <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
           <span>Resolving organisation workspace...</span>
         </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="text-slate-400 hover:text-white underline text-[11px] cursor-pointer transition-colors"
+        >
+          Taking longer than usual? Click to reset & return to Sign In
+        </button>
       </div>
     );
   }

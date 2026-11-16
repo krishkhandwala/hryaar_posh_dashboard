@@ -115,6 +115,9 @@ async def sse_event_generator(
                 current_id = max(0, latest[0] - 5)
 
     try:
+        # Immediate initial flush so HTTP headers are sent instantly to client/proxies
+        yield f": connected\n\n"
+
         while True:
             events_to_send = []
             with SessionLocal() as db:
