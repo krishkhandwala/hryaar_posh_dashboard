@@ -115,11 +115,13 @@ export default function Home() {
 
   // Restore session
   useEffect(() => {
-    const savedToken = localStorage.getItem('posh_token');
-    if (savedToken) {
-      setToken(savedToken);
-      fetchUserData();
-    }
+    try {
+      const savedToken = localStorage.getItem('posh_token');
+      if (savedToken) {
+        setToken(savedToken);
+        fetchUserData();
+      }
+    } catch {}
   }, []);
 
   const handleLogin = async (e?: React.FormEvent, directEmail?: string, directPassword?: string) => {
@@ -146,7 +148,9 @@ export default function Home() {
       const data = res.data;
       const access_token = data.access_token;
       const loggedUser = data.user || data;
-      localStorage.setItem('posh_token', access_token);
+      try {
+        localStorage.setItem('posh_token', access_token);
+      } catch {}
       setToken(access_token);
       setUser(loggedUser);
       setInspectedCompanyId(null);
@@ -179,7 +183,9 @@ export default function Home() {
 
   const handleLogout = () => {
     apiClient.post('/auth/logout').catch(() => {});
-    localStorage.removeItem('posh_token');
+    try {
+      localStorage.removeItem('posh_token');
+    } catch {}
     setToken(null);
     setUser(null);
     setCurrentCompany(null);
@@ -242,12 +248,14 @@ export default function Home() {
       setAuditLogs(logRes.data);
       setSubscriptionDetails(subRes.data);
 
-      applyTheme({
-        primary_color: compRes.data.primary_color,
-        secondary_color: compRes.data.secondary_color,
-        accent_color: compRes.data.accent_color,
-        sidebar_color: compRes.data.sidebar_color,
-      });
+      if (compRes?.data) {
+        applyTheme({
+          primary_color: compRes.data.primary_color,
+          secondary_color: compRes.data.secondary_color,
+          accent_color: compRes.data.accent_color,
+          sidebar_color: compRes.data.sidebar_color,
+        });
+      }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -256,15 +264,17 @@ export default function Home() {
   };
 
   const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      emp.employee_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!emp) return false;
+    const code = (emp.employee_code || '').toLowerCase();
+    const name = `${emp.first_name || ''} ${emp.last_name || ''}`.toLowerCase();
+    const email = (emp.email || '').toLowerCase();
+    const q = (searchTerm || '').toLowerCase();
+    const matchesSearch = code.includes(q) || name.includes(q) || email.includes(q);
     const matchesDept = selectedDept === 'ALL' || emp.department === selectedDept;
     return matchesSearch && matchesDept;
   });
 
-  const departmentList = Array.from(new Set(employees.map((e) => e.department))).filter(Boolean);
+  const departmentList = Array.from(new Set(employees.map((e) => e?.department))).filter(Boolean);
 
   // ==========================================
   // VIEW 0: HYDRATION MOUNT GUARD
@@ -385,8 +395,34 @@ export default function Home() {
                   <div className="space-y-1">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 px-1 flex items-center justify-between">
                       <span>Internal Platform Administration</span>
-                      <span className="text-[9px] text-blue-300 font-mono">tech@hryaar.com</span>
+                      <span className="text-[9px] text-blue-300 font-mono">Platform Admin</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginEmail('superadmin@hryaar.com');
+                        setLoginPassword('Admin@1234');
+                        handleLogin(undefined, 'superadmin@hryaar.com', 'Admin@1234');
+                      }}
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/40 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CompanyLogo name="HRYAAR" slug="hryaar" size="sm" />
+                        <div>
+                          <div className="font-semibold text-xs text-white flex items-center gap-2">
+                            <span>HRYAAR Super Admin</span>
+                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">superadmin@hryaar.com</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            Organisations, Users, Plans &amp; Platform Controls
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        Super Admin
+                      </span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -394,17 +430,17 @@ export default function Home() {
                         setLoginPassword('Admin@1234');
                         handleLogin(undefined, 'tech@hryaar.com', 'Admin@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/30 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/20 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
                         <CompanyLogo name="HRYAAR" slug="hryaar" size="sm" />
                         <div>
                           <div className="font-semibold text-xs text-white flex items-center gap-2">
-                            <span>HRYAAR Platform Admin</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">Super Admin</span>
+                            <span>HRYAAR Tech Admin</span>
+                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">tech@hryaar.com</span>
                           </div>
                           <div className="text-[11px] text-slate-400">
-                            Organisations, Users, Plans &amp; Audit Console
+                            Platform Engineering &amp; Operations
                           </div>
                         </div>
                       </div>
