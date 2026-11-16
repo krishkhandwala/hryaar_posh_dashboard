@@ -107,6 +107,12 @@ export default function Home() {
     };
   }, [selectedCompanyId, user?.company_id, subscribeToEvent]);
 
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Restore session
   useEffect(() => {
     const savedToken = localStorage.getItem('posh_token');
@@ -259,6 +265,20 @@ export default function Home() {
   });
 
   const departmentList = Array.from(new Set(employees.map((e) => e.department))).filter(Boolean);
+
+  // ==========================================
+  // VIEW 0: HYDRATION MOUNT GUARD
+  // ==========================================
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#061122] flex flex-col justify-center items-center p-6 select-none relative overflow-hidden">
+        <div className="max-w-md w-full bg-[#0A192F]/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-9 shadow-2xl relative z-10 flex flex-col items-center justify-center gap-3">
+          <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
+          <span className="text-xs text-slate-400 font-medium">Initializing secure gateway...</span>
+        </div>
+      </div>
+    );
+  }
 
   // ==========================================
   // VIEW 1: ENTERPRISE AUTHENTICATION GATEWAY
