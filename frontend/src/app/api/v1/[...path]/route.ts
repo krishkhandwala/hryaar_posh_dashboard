@@ -23,7 +23,7 @@ async function handleProxy(
     const forwardHeaders = new Headers();
     req.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
-      if (!['host', 'connection', 'content-length'].includes(lower)) {
+      if (!['host', 'connection', 'content-length', 'accept-encoding'].includes(lower)) {
         forwardHeaders.set(key, value);
       }
     });
@@ -54,7 +54,7 @@ async function handleProxy(
       const respHeaders = new Headers();
       res.headers.forEach((value, key) => {
         const lower = key.toLowerCase();
-        if (!['transfer-encoding', 'connection', 'content-encoding'].includes(lower)) {
+        if (!['transfer-encoding', 'connection', 'content-encoding', 'content-length'].includes(lower)) {
           respHeaders.set(key, value);
         }
       });
