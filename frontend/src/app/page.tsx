@@ -507,21 +507,21 @@ export default function Home() {
                         setLoginPassword('Admin@1234');
                         handleLogin(undefined, 'superadmin@hryaar.com', 'Admin@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/40 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/40 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="HRYAAR" slug="hryaar" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white flex items-center gap-2">
-                            <span>HRYAAR Super Admin</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">superadmin@hryaar.com</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white flex items-center gap-1.5 flex-wrap">
+                            <span className="whitespace-nowrap">HRYAAR Super Admin</span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded font-mono font-normal whitespace-nowrap">superadmin@hryaar.com</span>
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             Organisations, Users, Plans &amp; Platform Controls
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 whitespace-nowrap">
                         Super Admin
                       </span>
                     </button>
@@ -533,21 +533,21 @@ export default function Home() {
                         setLoginPassword('Admin@1234');
                         handleLogin(undefined, 'tech@hryaar.com', 'Admin@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/20 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-blue-500/20 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="HRYAAR" slug="hryaar" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white flex items-center gap-2">
-                            <span>HRYAAR Tech Admin</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-normal">tech@hryaar.com</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white flex items-center gap-1.5 flex-wrap">
+                            <span className="whitespace-nowrap">HRYAAR Tech Admin</span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded font-mono font-normal whitespace-nowrap">tech@hryaar.com</span>
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             Platform Engineering &amp; Operations
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 whitespace-nowrap">
                         Platform
                       </span>
                     </button>
@@ -565,20 +565,20 @@ export default function Home() {
                         setLoginPassword('Partner@1234');
                         handleLogin(undefined, 'partner@talentpro.com', 'Partner@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="LexVantage Advisory LLP" slug="talentpro" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white truncate">
                             LexVantage Advisory LLP
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             5,000 Seat Licences &bull; Nimbus &amp; Synergia Portfolio
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 whitespace-nowrap">
                         Partner
                       </span>
                     </button>
@@ -590,20 +590,20 @@ export default function Home() {
                         setLoginPassword('Partner@1234');
                         handleLogin(undefined, 'partner@apex.com', 'Partner@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="Meridian Workforce Partners" slug="apex" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white truncate">
                             Meridian Workforce Partners
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             3,000 Seat Licences &bull; Crestline Precision Portfolio
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 whitespace-nowrap">
                         Partner
                       </span>
                     </button>
@@ -622,20 +622,20 @@ export default function Home() {
                         setLoginPassword('Acme@1234');
                         handleLogin(undefined, 'hr@acme.com', 'Acme@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="Nimbus Cloud Systems Pvt. Ltd." slug="acme" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white truncate">
                             Nimbus Cloud Systems Pvt. Ltd.
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             1,250 Learners &bull; Managed by LexVantage
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0 whitespace-nowrap">
                         Client
                       </span>
                     </button>
@@ -647,20 +647,20 @@ export default function Home() {
                         setLoginPassword('Nexus@1234');
                         handleLogin(undefined, 'hr@nexusbio.com', 'Nexus@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="Synergia BioSciences Ltd." slug="nexusbio" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white truncate">
                             Synergia BioSciences Ltd.
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             450 Learners &bull; Managed by LexVantage
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0 whitespace-nowrap">
                         Client
                       </span>
                     </button>
@@ -672,20 +672,20 @@ export default function Home() {
                         setLoginPassword('Beta@1234');
                         handleLogin(undefined, 'hr@beta.com', 'Beta@1234');
                       }}
-                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group"
+                      className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-colors flex items-center justify-between cursor-pointer group gap-2.5"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CompanyLogo name="Crestline Precision Engineering" slug="beta" size="sm" />
-                        <div>
-                          <div className="font-semibold text-xs text-white">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-white truncate">
                             Crestline Precision Engineering
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             600 Learners &bull; Managed by Meridian
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0 whitespace-nowrap">
                         Client
                       </span>
                     </button>
