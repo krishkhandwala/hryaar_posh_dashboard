@@ -19,7 +19,7 @@ export function getBalancerRegistry(): BalancerRegistry {
     process.env.BACKEND_UPSTREAMS ||
     process.env.BACKEND_INTERNAL_URL ||
     (isVercel
-      ? 'https://hryaar-posh-dashboard.onrender.com'
+      ? 'https://hryaar-posh-dashboard-xpd1.onrender.com'
       : 'http://127.0.0.1:8001,http://127.0.0.1:8002');
 
   const urls = raw
