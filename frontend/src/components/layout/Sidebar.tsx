@@ -18,7 +18,8 @@ import {
   Webhook,
   Shield,
   UploadCloud,
-  CreditCard
+  CreditCard,
+  X
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 
@@ -38,6 +39,8 @@ interface SidebarProps {
   onLogout: () => void;
   isSuperAdminSupervision?: boolean;
   onReturnToSuperAdmin?: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -56,6 +59,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   isSuperAdminSupervision = false,
   onReturnToSuperAdmin,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   const isWhiteLabel = Boolean(partnerName && coBrandingMode === 'WHITE_LABEL');
   const isCoBranded = Boolean(partnerName && coBrandingMode === 'CO_BRANDED');
@@ -100,34 +105,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ];
 
   return (
-    <aside
-      className="w-[270px] h-screen text-slate-100 flex flex-col justify-between border-r border-slate-800/80 select-none shrink-0 relative overflow-hidden"
-      style={{ backgroundColor: resolvedSidebarBg }}
-    >
-      <div className="relative z-10 flex flex-col h-full overflow-y-auto">
-        {/* Brand Header */}
-        <div className="px-6 py-5 border-b border-slate-800/80">
-          <div className="flex items-center gap-3">
-            <CompanyLogo
-              name={displayBrandName}
-              logoUrl={displayBrandLogo}
-              primaryColor={resolvedPrimaryColor}
-              size="md"
-            />
-            <div className="truncate max-w-[165px]">
-              <div className="font-bold text-slate-100 text-sm tracking-tight truncate">
-                {displayBrandName}
+    <>
+      {/* Mobile Drawer Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          onClick={onCloseMobile}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[270px] h-screen text-slate-100 flex flex-col justify-between border-r border-slate-800/80 select-none shrink-0 overflow-hidden transition-transform duration-300 md:relative md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
+        style={{ backgroundColor: resolvedSidebarBg }}
+      >
+        <div className="relative z-10 flex flex-col h-full overflow-y-auto">
+          {/* Brand Header */}
+          <div className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <CompanyLogo
+                name={displayBrandName}
+                logoUrl={displayBrandLogo}
+                primaryColor={resolvedPrimaryColor}
+                size="md"
+              />
+              <div className="truncate max-w-[150px]">
+                <div className="font-bold text-slate-100 text-sm tracking-tight truncate">
+                  {displayBrandName}
+                </div>
+                <span className="text-[11px] block font-medium text-slate-400 mt-0.5 truncate">
+                  {isWhiteLabel
+                    ? `${companyName}`
+                    : isCoBranded
+                    ? `Managed by ${partnerName}`
+                    : 'Compliance Portal'}
+                </span>
               </div>
-              <span className="text-[11px] block font-medium text-slate-400 mt-0.5 truncate">
-                {isWhiteLabel
-                  ? `${companyName}`
-                  : isCoBranded
-                  ? `Managed by ${partnerName}`
-                  : 'Compliance & Training Portal'}
-              </span>
             </div>
+
+            {/* Mobile Close Button */}
+            {onCloseMobile && (
+              <button
+                type="button"
+                onClick={onCloseMobile}
+                className="md:hidden p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-        </div>
 
         {/* Supervision Banner */}
         {isSuperAdminSupervision && (
@@ -161,7 +188,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setCurrentTab(item.id)}
+                      onClick={() => {
+                        setCurrentTab(item.id);
+                        onCloseMobile?.();
+                      }}
                       style={
                         isActive
                           ? {
@@ -246,5 +276,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
     </aside>
+    </>
   );
 };

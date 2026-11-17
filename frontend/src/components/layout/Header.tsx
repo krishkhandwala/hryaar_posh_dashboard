@@ -13,7 +13,8 @@ import {
   RefreshCw,
   Radio,
   X,
-  Trash2
+  Trash2,
+  Menu
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { SecuritySessionsModal } from '@/components/layout/SecuritySessionsModal';
@@ -32,6 +33,7 @@ interface HeaderProps {
   isSuperAdminSupervision?: boolean;
   onReturnToSuperAdmin?: () => void;
   onNavigateToComplaints?: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSuperAdminSupervision = false,
   onReturnToSuperAdmin,
   onNavigateToComplaints,
+  onToggleMobileMenu,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
@@ -58,16 +61,28 @@ export const Header: React.FC<HeaderProps> = ({
   const displayLogo = isWhiteLabel ? (partnerLogoUrl || logoUrl) : logoUrl;
 
   return (
-    <header className="h-18 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 select-none shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center gap-5">
+    <header className="h-16 md:h-18 bg-white border-b border-slate-200/80 px-4 md:px-8 flex items-center justify-between sticky top-0 z-30 select-none shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center gap-3 md:gap-5 min-w-0">
+        {/* Mobile Hamburger Menu Toggle */}
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="p-2 -ml-1 md:hidden text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"
+            title="Open Navigation Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Super Admin Supervision Exit */}
         {isSuperAdminSupervision && onReturnToSuperAdmin && (
           <button
             onClick={onReturnToSuperAdmin}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Hub</span>
+            <span className="hidden sm:inline">Return to Hub</span>
           </button>
         )}
 

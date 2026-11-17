@@ -372,8 +372,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans select-none">
       {/* Top Header */}
-      <header className="h-18 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-        <div className="flex items-center gap-4">
+      <header className="h-16 md:h-18 bg-white border-b border-slate-200/80 px-4 md:px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+        <div className="flex items-center gap-3 md:gap-4 min-w-0">
           <CompanyLogo
             name={portfolio?.partner_name || 'Organisation Workspace'}
             slug={user?.company_slug || 'talentpro'}
@@ -381,16 +381,16 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
             primaryColor={partnerPrimaryColor}
             size="md"
           />
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base md:text-lg font-bold text-slate-900 tracking-tight truncate">
                 {portfolio?.partner_name || 'Partner Workspace'}
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200/60">
+              <span className="hidden sm:inline-flex text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200/60 shrink-0">
                 Client Management
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
+            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden sm:block">
               Client Portfolio, Licence Allocation &amp; White-Label Controls
             </p>
           </div>
@@ -439,13 +439,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
       </header>
 
       {/* Main Workspace */}
-      <main className="p-8 max-w-7xl w-full mx-auto space-y-7 flex-1">
+      <main className="p-4 md:p-8 max-w-7xl w-full mx-auto space-y-6 md:space-y-7 flex-1">
         {/* Navigation Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200/80 pb-4 gap-4">
-          <div className="flex items-center bg-slate-200/60 p-1 rounded-xl">
+          <div className="flex items-center bg-slate-200/60 p-1 rounded-xl overflow-x-auto scrollbar-none max-w-full">
             <button
               onClick={() => setActiveTab('clients')}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 md:px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 md:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'clients'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -457,7 +457,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
 
             <button
               onClick={() => setActiveTab('hierarchy')}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 md:px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 md:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'hierarchy'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -469,7 +469,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
 
             <button
               onClick={() => setActiveTab('branding')}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 md:px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 md:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'branding'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'

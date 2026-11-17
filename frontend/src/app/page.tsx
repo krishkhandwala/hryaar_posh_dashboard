@@ -63,6 +63,7 @@ export default function Home() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showDemoDrawer, setShowDemoDrawer] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Dashboard Data State - Initialized with live baseline metrics
   const [kpis, setKpis] = useState({
@@ -336,28 +337,28 @@ export default function Home() {
   // ==========================================
   if (!token) {
     return (
-      <div className="min-h-screen bg-[#061122] flex flex-col justify-center items-center p-6 select-none relative overflow-hidden">
+      <div className="min-h-screen bg-[#061122] flex flex-col justify-center items-center py-8 px-4 sm:p-6 select-none relative overflow-y-auto">
         {/* Atmospheric background radial glows */}
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-md w-full bg-[#0A192F]/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-9 shadow-2xl relative z-10">
+        <div className="max-w-md w-full bg-[#0A192F]/90 backdrop-blur-xl border border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl relative z-10 my-auto">
           {/* Brand Header */}
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-center mb-5 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
               Enterprise SaaS Platform
             </h2>
             <p className="text-xs text-slate-400 mt-1">HRYAAR Digi-PoSH Governance Operating System</p>
           </div>
 
           {/* 1-Click Instant Showcase Launchpad */}
-          <div className="mb-6 p-3.5 bg-blue-950/40 border border-blue-500/40 rounded-2xl space-y-2.5">
+          <div className="mb-5 sm:mb-6 p-3 sm:p-3.5 bg-blue-950/40 border border-blue-500/40 rounded-2xl space-y-2.5">
             <div className="text-[11px] font-bold text-blue-300 flex items-center justify-between px-1">
               <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span>Instant Showcase (1-Click Access)</span>
               </span>
-              <span className="text-[10px] text-emerald-400 font-medium">● Cluster Active</span>
+              <span className="text-[10px] text-emerald-400 font-medium shrink-0">● Cluster Active</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2">
@@ -365,39 +366,39 @@ export default function Home() {
                 type="button"
                 disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('SUPER_ADMIN')}
-                className="w-full py-2.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-200" />
-                  <span>👑 Super Admin Control Plane</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShieldCheck className="w-4 h-4 text-blue-200 shrink-0" />
+                  <span className="truncate">👑 Super Admin Control Plane</span>
                 </div>
-                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-blue-200 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-blue-200" />}
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-blue-200 animate-spin shrink-0 ml-2" /> : <ArrowRight className="w-3.5 h-3.5 text-blue-200 shrink-0 ml-2" />}
               </button>
 
               <button
                 type="button"
                 disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('COMPANY_ADMIN')}
-                className="w-full py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-semibold text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
+                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-semibold text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
-                  <span>🏢 Client HR Portal (Acme Corp / Nimbus)</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">🏢 Client HR Portal (Acme / Nimbus)</span>
                 </div>
-                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />}
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0 ml-2" /> : <ArrowRight className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-2" />}
               </button>
 
               <button
                 type="button"
                 disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('PARTNER_ADMIN')}
-                className="w-full py-2 px-3.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-medium text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
+                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-medium text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-amber-400" />
-                  <span>🤝 Partner Portal (LexVantage Advisory)</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Layers className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">🤝 Partner Portal (LexVantage)</span>
                 </div>
-                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-amber-400" />}
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0 ml-2" /> : <ArrowRight className="w-3.5 h-3.5 text-amber-400 shrink-0 ml-2" />}
               </button>
             </div>
           </div>
@@ -796,10 +797,12 @@ export default function Home() {
         onLogout={handleLogout}
         isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
         onReturnToSuperAdmin={() => setInspectedCompanyId(null)}
+        isMobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
       {/* Main Workspace */}
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC]">
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC] min-w-0">
         <Header
           userName={user?.full_name || 'HR Administrator'}
           userRole={user?.role || 'COMPANY_ADMIN'}
@@ -813,9 +816,10 @@ export default function Home() {
           isSuperAdminSupervision={(isSuperAdmin || isPartnerAdmin) && !!inspectedCompanyId}
           onReturnToSuperAdmin={() => setInspectedCompanyId(null)}
           onNavigateToComplaints={canViewGrievances ? () => setCurrentTab('complaints') : undefined}
+          onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
         />
 
-        <main className="p-8 space-y-7 max-w-7xl w-full mx-auto pb-16">
+        <main className="p-4 md:p-8 space-y-6 md:space-y-7 max-w-7xl w-full mx-auto pb-16">
           {/* TAB 1: EXECUTIVE PULSE (MAIN DASHBOARD - STRICTLY 7 ITEMS) */}
           {currentTab === 'dashboard' && (
             <>
