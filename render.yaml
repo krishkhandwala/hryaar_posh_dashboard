@@ -18,3 +18,4 @@ services:
         value: "*"
       - key: ENVIRONMENT
         value: production
+

@@ -114,79 +114,16 @@ export default function Home() {
   }, []);
 
   const instantEnterWorkspace = (role: 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'PARTNER_ADMIN') => {
-    let mockUser: any;
-    if (role === 'SUPER_ADMIN') {
-      mockUser = {
-        id: '42b868f1-18f0-4aab-9140-4f7d9baee606',
-        email: 'superadmin@hryaar.com',
-        full_name: 'Platform Administrator',
-        role: 'SUPER_ADMIN',
-        workspace: 'INTERNAL_PLATFORM',
-        company_type: 'PLATFORM',
-        permissions: ['platform.organisations.read', 'platform.analytics.read', 'platform.audit.read', 'platform.users.manage'],
-      };
-    } else if (role === 'PARTNER_ADMIN') {
-      mockUser = {
-        id: 'usr-partner',
-        email: 'partner@talentpro.com',
-        full_name: 'TalentPro Partner Lead',
-        role: 'PARTNER_ADMIN',
-        workspace: 'PARTNER_WORKSPACE',
-        company_type: 'PARTNER',
-        permissions: ['partner.clients.read', 'partner.licences.allocate'],
-      };
-    } else {
-      mockUser = {
-        id: '2699b59b-e1eb-4075-b5e4-ed3121a1d687',
-        email: 'hr@acme.com',
-        full_name: 'Pooja Sharma (Nimbus Cloud HR Lead)',
-        role: 'COMPANY_ADMIN',
-        workspace: 'CLIENT_HR_WORKSPACE',
-        company_id: 'c-acme-corp-1250',
-        company_name: 'Nimbus Cloud Systems Pvt. Ltd.',
-        company_type: 'CLIENT',
-        logo_url: '/logos/nimbus.svg',
-        primary_color: '#142D50',
-        secondary_color: '#2A62FF',
-        accent_color: '#F2B632',
-        sidebar_color: '#0B192E',
-        welcome_message: 'Welcome to Nimbus Cloud Systems PoSH Sensitization & Compliance Workspace',
-        permissions: ['company.employees.read', 'company.settings.manage', 'company.training.assign'],
-      };
-      setSelectedCompanyId('c-acme-corp-1250');
-      setCurrentCompany(mockUser);
-    }
-
-    const demoToken = 'session-active-' + Date.now();
-    try {
-      localStorage.setItem('posh_token', demoToken);
-    } catch {}
-    setToken(demoToken);
-    setUser(mockUser);
-    setInspectedCompanyId(null);
-    setCurrentTab('dashboard');
-
-    // Asynchronously link to live database session in the background
-    const credentials =
+    const creds =
       role === 'SUPER_ADMIN'
         ? { email: 'superadmin@hryaar.com', password: 'Admin@1234' }
         : role === 'PARTNER_ADMIN'
         ? { email: 'partner@talentpro.com', password: 'Partner@1234' }
         : { email: 'hr@acme.com', password: 'Acme@1234' };
 
-    apiClient.post('/auth/login', credentials).then((res) => {
-      if (res.data?.access_token) {
-        try { localStorage.setItem('posh_token', res.data.access_token); } catch {}
-        setToken(res.data.access_token);
-        if (role === 'COMPANY_ADMIN') {
-          loadDashboardData('c-acme-corp-1250');
-        }
-      }
-    }).catch(() => {
-      if (role === 'COMPANY_ADMIN') {
-        loadDashboardData('c-acme-corp-1250');
-      }
-    });
+    setLoginEmail(creds.email);
+    setLoginPassword(creds.password);
+    handleLogin(undefined, creds.email, creds.password);
   };
 
   // Restore session or auto-login via demo query parameter
@@ -276,7 +213,12 @@ export default function Home() {
         loadDashboardData(loggedUser.company_id);
       }
     } catch (err: any) {
-      setLoginError(err.response?.data?.detail || err.message || 'Invalid corporate credentials');
+      const isTimeout = err?.code === 'ECONNABORTED' || (err?.message && err.message.toLowerCase().includes('timeout'));
+      if (isTimeout) {
+        setLoginError('Server cold-start in progress. Waking up live cloud container... Please click Sign In again.');
+      } else {
+        setLoginError(err.response?.data?.detail || err.message || 'Invalid corporate credentials');
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -421,38 +363,41 @@ export default function Home() {
             <div className="grid grid-cols-1 gap-2">
               <button
                 type="button"
+                disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('SUPER_ADMIN')}
-                className="w-full py-2.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-95 cursor-pointer flex items-center justify-between"
+                className="w-full py-2.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-blue-200" />
                   <span>👑 Super Admin Control Plane</span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-blue-200 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-blue-200" />}
               </button>
 
               <button
                 type="button"
+                disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('COMPANY_ADMIN')}
-                className="w-full py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-semibold text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between"
+                className="w-full py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-semibold text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-emerald-400" />
                   <span>🏢 Client HR Portal (Acme Corp / Nimbus)</span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />}
               </button>
 
               <button
                 type="button"
+                disabled={loginLoading}
                 onClick={() => instantEnterWorkspace('PARTNER_ADMIN')}
-                className="w-full py-2 px-3.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-medium text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between"
+                className="w-full py-2 px-3.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-medium text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-between disabled:opacity-50"
               >
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-amber-400" />
                   <span>🤝 Partner Portal (LexVantage Advisory)</span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                {loginLoading ? <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5 text-amber-400" />}
               </button>
             </div>
           </div>
@@ -515,7 +460,7 @@ export default function Home() {
               {loginLoading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                  <span>Authenticating Identity...</span>
+                  <span>Connecting to Live Cloud Cluster...</span>
                 </>
               ) : (
                 <>
